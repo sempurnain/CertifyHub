@@ -1,0 +1,6 @@
+{
+  "name": "CertifyHub",
+  "description": "Digital Certificate Management System with integrated Firebase configuration",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

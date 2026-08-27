@@ -1,0 +1,2691 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CertifyHub - Digital Certificate Management System</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- QRCode.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .font-serif-cert { font-family: 'Playfair Display', serif; }
+        .font-sans-cert { font-family: 'Montserrat', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        @media print {
+            body * { visibility: hidden; }
+            #printable-area, #printable-area * { visibility: visible; }
+            #printable-area { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col text-slate-800 antialiased selection:bg-brand-500 selection:text-white">
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-[9999] flex flex-col gap-3 max-w-md w-full pointer-events-none"></div>
+
+    <!-- Fullscreen Loading Overlay -->
+    <div id="global-loader" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9000] hidden flex flex-col items-center justify-center text-white transition-opacity">
+        <div class="relative w-20 h-20">
+            <div class="absolute border-4 border-white/20 border-t-brand-500 rounded-full w-full h-full animate-spin"></div>
+            <i class="fa-solid fa-certificate absolute inset-0 flex items-center justify-center text-2xl text-brand-400"></i>
+        </div>
+        <p id="loader-message" class="mt-4 font-semibold text-lg tracking-wide">Memproses data...</p>
+        <div id="loader-progress-container" class="w-64 bg-slate-700 h-2.5 rounded-full mt-3 overflow-hidden hidden border border-slate-600">
+            <div id="loader-progress-bar" class="bg-brand-500 h-full w-0 transition-all duration-200"></div>
+        </div>
+        <p id="loader-submessage" class="text-xs text-slate-300 mt-1"></p>
+    </div>
+
+    <!-- Offline Warning Banner -->
+    <div id="offline-banner" class="bg-amber-500 text-white text-xs font-bold py-1.5 px-4 text-center hidden flex items-center justify-center gap-2 shadow-inner">
+        <i class="fa-solid fa-wifi font-normal"></i> Anda sedang offline. Fitur sinkronisasi cloud dinonaktifkan sementara.
+    </div>
+
+    <!-- Demo Mode Warning Banner -->
+    <div id="demo-banner" class="bg-indigo-600 text-white text-xs font-semibold py-1.5 px-4 text-center hidden items-center justify-between shadow-md">
+        <div class="flex items-center gap-2 mx-auto">
+            <span class="bg-indigo-800 text-indigo-200 text-[10px] uppercase font-extrabold px-2 py-0.5 rounded">DEMO MODE</span>
+            <span>Konfigurasi Firebase/Cloudinary belum diatur. Data tersimpan di penyimpanan lokal browser.</span>
+        </div>
+        <button onclick="app.showConfigModal()" class="underline text-indigo-100 hover:text-white text-xs ml-2">Atur API Key</button>
+    </div>
+
+    <!-- APP CONTAINER -->
+    <div id="app" class="flex-1 flex overflow-hidden">
+
+        <!-- PUBLIC VERIFICATION VIEW -->
+        <div id="view-public-verify" class="hidden fixed inset-0 z-[8000] bg-slate-900 overflow-y-auto p-4 md:p-8 flex flex-col items-center justify-center">
+            <div class="max-w-3xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 my-auto">
+                <div id="verify-status-header" class="p-6 md:p-8 text-center text-white bg-slate-800 relative overflow-hidden">
+                    <div class="absolute -right-10 -bottom-10 opacity-10 text-9xl"><i class="fa-solid fa-award"></i></div>
+                    <div id="verify-badge-icon" class="w-20 h-20 mx-auto rounded-full bg-white/10 backdrop-blur flex items-center justify-center text-4xl mb-4">
+                        <i class="fa-solid fa-spinner animate-spin"></i>
+                    </div>
+                    <h1 id="verify-status-title" class="text-2xl md:text-3xl font-bold">Memeriksa Keaslian Sertifikat...</h1>
+                    <p id="verify-status-subtitle" class="text-slate-300 text-sm mt-1">CertifyHub Digital Verification System</p>
+                </div>
+
+                <div id="verify-details-body" class="p-6 md:p-8 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-sm">
+                        <div>
+                            <span class="text-slate-400 block text-xs font-medium uppercase">Nama Penerima</span>
+                            <strong id="v-name" class="text-slate-800 text-base font-bold">-</strong>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-xs font-medium uppercase">Nomor Sertifikat</span>
+                            <strong id="v-number" class="text-slate-800 text-base font-mono">-</strong>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-xs font-medium uppercase">Nama Kegiatan</span>
+                            <strong id="v-event" class="text-slate-800 font-semibold">-</strong>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-xs font-medium uppercase">Tanggal Terbit</span>
+                            <strong id="v-date" class="text-slate-800">-</strong>
+                        </div>
+                        <div class="md:col-span-2">
+                            <span class="text-slate-400 block text-xs font-medium uppercase">Unique Identifier (UUID)</span>
+                            <span id="v-uuid" class="text-slate-600 font-mono text-xs break-all">-</span>
+                        </div>
+                    </div>
+
+                    <div id="verify-revoked-box" class="hidden bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm">
+                        <strong class="font-bold block mb-1"><i class="fa-solid fa-triangle-exclamation"></i> Sertifikat Telah Dicabut!</strong>
+                        <p id="v-revoke-reason" class="text-xs"></p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Preview Visual Sertifikat</span>
+                        <div class="relative bg-slate-100 rounded-xl overflow-hidden border border-slate-200 aspect-video flex items-center justify-center">
+                            <img id="v-image" src="" alt="Certificate Preview" class="w-full h-full object-contain hidden">
+                            <div id="v-image-placeholder" class="text-center p-6 text-slate-400">
+                                <i class="fa-solid fa-file-certificate text-4xl mb-2"></i>
+                                <p class="text-xs">Visual sertifikat belum di-generate atau tidak tersedia.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                        <button id="v-btn-download-pdf" onclick="app.downloadVerifyPDF()" class="flex-1 py-3 px-4 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-semibold text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-brand-500/20">
+                            <i class="fa-solid fa-file-pdf"></i> Unduh PDF Asli
+                        </button>
+                        <a href="index.html" class="py-3 px-6 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-sm transition text-center">
+                            Ke Halaman Utama
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PUBLIC SELF-SERVICE CERTIFICATE GENERATOR / CLAIM VIEW -->
+        <div id="view-public-claim" class="hidden fixed inset-0 z-[8000] bg-slate-900 overflow-y-auto p-4 md:p-8 flex flex-col items-center">
+            <div class="max-w-4xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 my-auto flex flex-col">
+                <!-- Header -->
+                <div class="p-6 md:p-8 bg-gradient-to-r from-brand-900 via-brand-800 to-indigo-950 text-white relative overflow-hidden">
+                    <div class="absolute -right-10 -bottom-10 opacity-10 text-9xl"><i class="fa-solid fa-certificate"></i></div>
+                    <div class="flex items-center gap-3 mb-2">
+                        <span class="px-3 py-1 bg-brand-500/30 border border-brand-400/40 rounded-full text-[11px] font-bold tracking-wider uppercase text-brand-200">
+                            <i class="fa-solid fa-sparkles mr-1"></i> Self-Service Generator
+                        </span>
+                        <span id="claim-event-status-badge" class="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-full text-[10px] font-bold uppercase">Active Event</span>
+                    </div>
+                    <h1 id="claim-event-title" class="text-2xl md:text-3xl font-extrabold tracking-tight">Nama Kegiatan / Event</h1>
+                    <p id="claim-event-organizer" class="text-brand-200 text-sm mt-1">Diselenggarakan oleh: Penyelenggara</p>
+                    <p id="claim-event-desc" class="text-slate-300 text-xs mt-2 max-w-2xl">Silakan masukkan nama lengkap Anda untuk meng-generate dan mengunduh sertifikat resmi dengan resolusi maksimal.</p>
+                </div>
+
+                <div class="p-6 md:p-8 space-y-6">
+                    <!-- Input Section -->
+                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                                    <span><i class="fa-solid fa-user text-brand-600 mr-1.5"></i> Nama Lengkap & Gelar <span class="text-rose-500">*</span></span>
+                                    <span class="text-[10px] text-slate-400 font-normal">Live Preview Aktif</span>
+                                </label>
+                                <input type="text" id="claim-input-name" oninput="app.updateLiveClaimPreview()" placeholder="Contoh: Sarah Nurhaliza, S.T., M.Kom." class="w-full px-4 py-3 bg-white rounded-xl border border-slate-300 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-500 focus:outline-none shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1.5">
+                                    <i class="fa-solid fa-building text-brand-600 mr-1.5"></i> Instansi / Universitas / Perusahaan <span class="text-slate-400 font-normal">(Opsional)</span>
+                                </label>
+                                <input type="text" id="claim-input-inst" oninput="app.updateLiveClaimPreview()" placeholder="Contoh: Universitas Indonesia / Google Developer Student Club" class="w-full px-4 py-3 bg-white rounded-xl border border-slate-300 text-sm text-slate-800 focus:ring-2 focus:ring-brand-500 focus:outline-none shadow-sm">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div>
+                                <label class="block font-bold text-slate-600 mb-1"><i class="fa-solid fa-envelope text-slate-400 mr-1"></i> Email <span class="text-slate-400 font-normal">(Opsional untuk arsip)</span></label>
+                                <input type="email" id="claim-input-email" placeholder="nama@email.com" class="w-full px-3 py-2 bg-white rounded-xl border border-slate-200">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-slate-600 mb-1"><i class="fa-brands fa-whatsapp text-slate-400 mr-1"></i> No WhatsApp <span class="text-slate-400 font-normal">(Opsional)</span></label>
+                                <input type="text" id="claim-input-phone" placeholder="08123456789" class="w-full px-3 py-2 bg-white rounded-xl border border-slate-200">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Certificate Preview Canvas Container -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                <i class="fa-solid fa-eye text-brand-600"></i> Live Preview Sertifikat (Ukuran Asli Sesuai Desain)
+                            </span>
+                            <span id="claim-dimension-info" class="text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">Dimensi: Memuat...</span>
+                        </div>
+                        <div id="claim-canvas-container" class="relative bg-slate-900/90 rounded-2xl overflow-hidden border border-slate-700 flex items-center justify-center p-3 min-h-[260px] shadow-inner">
+                            <canvas id="claim-live-canvas" class="max-w-full max-h-[460px] h-auto object-contain rounded shadow-2xl"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Download High-Resolution Actions -->
+                    <div class="bg-gradient-to-br from-brand-50 to-indigo-50/50 p-5 rounded-2xl border border-brand-100 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-extrabold text-brand-900 uppercase tracking-wider flex items-center gap-1.5">
+                                <i class="fa-solid fa-download text-brand-600"></i> Unduh Sertifikat (Ultra High-Resolution)
+                            </h4>
+                            <span class="text-[10px] text-emerald-700 font-bold bg-emerald-100/80 px-2 py-0.5 rounded-full">Kualitas Maksimal (300 DPI / Dimensi Asli)</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button onclick="app.downloadClaimPNG()" class="py-3.5 px-5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs transition shadow-lg shadow-brand-500/25 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-file-image text-base"></i>
+                                <span>Unduh PNG Resolusi Tinggi</span>
+                            </button>
+                            <button onclick="app.downloadClaimPDF()" class="py-3.5 px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-file-pdf text-base"></i>
+                                <span>Unduh PDF Kualitas Cetak</span>
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-slate-500 text-center">Setiap sertifikat yang Anda buat dilengkapi dengan QR Code unik dan tercatat resmi pada sistem verifikasi keaslian.</p>
+                    </div>
+
+                    <div class="pt-2 flex items-center justify-between text-xs border-t border-slate-100">
+                        <span id="claim-verification-preview" class="text-slate-400 font-mono text-[11px]">QR Code & UUID Terintegrasi</span>
+                        <a href="index.html" class="text-brand-600 hover:underline font-semibold flex items-center gap-1">
+                            <i class="fa-solid fa-arrow-left"></i> Kembali ke Dashboard Utama
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AUTH MODAL / VIEW -->
+        <div id="view-auth" class="hidden fixed inset-0 z-[7000] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div class="bg-white max-w-md w-full rounded-3xl shadow-2xl p-8 border border-slate-100 relative overflow-hidden">
+                <div class="text-center mb-8">
+                    <div class="w-14 h-14 bg-brand-600 text-white rounded-2xl flex items-center justify-center mx-auto text-2xl font-black shadow-xl shadow-brand-500/30 mb-3">
+                        <i class="fa-solid fa-award"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-slate-800">CertifyHub Platform</h2>
+                    <p class="text-xs text-slate-500 mt-1">Sistem Manajemen Sertifikat Digital Terintegrasi</p>
+                </div>
+
+                <div class="flex bg-slate-100 p-1 rounded-xl mb-6 text-xs font-semibold">
+                    <button id="tab-login-btn" onclick="app.switchAuthTab('login')" class="flex-1 py-2 rounded-lg bg-white shadow-sm text-brand-600 font-bold transition">Masuk</button>
+                    <button id="tab-register-btn" onclick="app.switchAuthTab('register')" class="flex-1 py-2 rounded-lg text-slate-500 hover:text-slate-800 transition">Daftar Akun</button>
+                </div>
+
+                <form id="form-login" onsubmit="app.handleLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 mb-1">Email Administrator</label>
+                        <input type="email" id="login-email" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" placeholder="admin@certifyhub.com">
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-bold text-slate-600">Kata Sandi</label>
+                            <button type="button" onclick="app.handleForgotPassword()" class="text-[11px] text-brand-600 hover:underline">Lupa password?</button>
+                        </div>
+                        <input type="password" id="login-password" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm shadow-lg shadow-brand-500/30 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-right-to-bracket"></i> Masuk ke Dashboard
+                    </button>
+                </form>
+
+                <form id="form-register" onsubmit="app.handleRegister(event)" class="space-y-4 hidden">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 mb-1">Nama Lengkap</label>
+                        <input type="text" id="reg-name" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" placeholder="Budi Santoso">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 mb-1">Email</label>
+                        <input type="email" id="reg-email" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" placeholder="nama@domain.com">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 mb-1">Kata Sandi</label>
+                        <input type="password" id="reg-password" minlength="6" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" placeholder="Minimal 6 karakter">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 mb-1">Role Pengguna</label>
+                        <select id="reg-role" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white">
+                            <option value="admin">Admin (Pengelola Event & Sertifikat)</option>
+                            <option value="operator">Operator (Manajemen Peserta & Generate)</option>
+                            <option value="viewer">Viewer (Hanya Lihat Data)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm shadow-lg shadow-brand-500/30 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-user-plus"></i> Buat Akun Baru
+                    </button>
+                </form>
+
+                <div class="mt-6 pt-4 border-t border-slate-100 text-center">
+                    <button onclick="app.continueAsDemo()" class="text-xs text-slate-500 hover:text-slate-800 font-medium underline">
+                        Atau Lanjutkan Mode Demo (Offline / Fallback Lokal)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <aside id="sidebar" class="w-64 bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 transition-all duration-300 -translate-x-full md:translate-x-0 fixed md:relative z-40 h-full border-r border-slate-800">
+            <div class="h-16 flex items-center justify-between px-6 border-b border-slate-800/80">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-brand-600 rounded-xl flex items-center justify-center text-white text-lg font-black shadow-md shadow-brand-500/30">
+                        <i class="fa-solid fa-certificate"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-extrabold text-white text-base leading-none tracking-tight">CertifyHub</h1>
+                        <span class="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Cloud v2.5</span>
+                    </div>
+                </div>
+                <button onclick="app.toggleSidebar()" class="md:hidden text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <div class="p-4 bg-slate-950/40 border-b border-slate-800/60 flex items-center gap-3">
+                <img id="user-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" class="w-10 h-10 rounded-full object-cover border-2 border-brand-500">
+                <div class="min-w-0 flex-1">
+                    <p id="user-name" class="text-xs font-bold text-white truncate">Administrator</p>
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                        <span id="user-role-badge" class="bg-brand-500/20 text-brand-300 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border border-brand-500/30">SUPERADMIN</span>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="flex-1 p-3 space-y-1 overflow-y-auto text-xs font-medium">
+                <button onclick="app.navigate('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition bg-brand-600 text-white font-bold">
+                    <i class="fa-solid fa-chart-pie text-base w-5 text-center"></i> Dashboard
+                </button>
+                <button onclick="app.navigate('events')" id="nav-events" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-800 text-slate-400 hover:text-slate-100">
+                    <i class="fa-solid fa-calendar-check text-base w-5 text-center"></i> Event & Kegiatan
+                </button>
+                <button onclick="app.navigate('participants')" id="nav-participants" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-800 text-slate-400 hover:text-slate-100">
+                    <i class="fa-solid fa-users text-base w-5 text-center"></i> Data Peserta
+                </button>
+                <button onclick="app.navigate('templates')" id="nav-templates" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-800 text-slate-400 hover:text-slate-100">
+                    <i class="fa-solid fa-pen-ruler text-base w-5 text-center"></i> Template Editor
+                </button>
+                <button onclick="app.navigate('certificates')" id="nav-certificates" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-800 text-slate-400 hover:text-slate-100">
+                    <i class="fa-solid fa-file-invoice text-base w-5 text-center"></i> Sertifikat Issued
+                </button>
+                <button onclick="app.navigate('users')" id="nav-users" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-800 text-slate-400 hover:text-slate-100">
+                    <i class="fa-solid fa-user-gear text-base w-5 text-center"></i> Pengguna & Role
+                </button>
+                <button onclick="app.navigate('logs')" id="nav-logs" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-800 text-slate-400 hover:text-slate-100">
+                    <i class="fa-solid fa-list-check text-base w-5 text-center"></i> Activity Logs
+                </button>
+                <button onclick="app.navigate('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition hover:bg-slate-800 text-slate-400 hover:text-slate-100">
+                    <i class="fa-solid fa-sliders text-base w-5 text-center"></i> Pengaturan
+                </button>
+            </nav>
+
+            <div class="p-3 border-t border-slate-800/80">
+                <button onclick="app.handleLogout()" class="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-800 hover:bg-red-600/20 hover:text-red-400 text-slate-400 rounded-xl text-xs font-bold transition">
+                    <i class="fa-solid fa-right-from-bracket"></i> Keluar Sistem
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <div class="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
+
+            <!-- TOP NAVBAR -->
+            <header class="h-16 bg-white border-b border-slate-200/80 flex items-center justify-between px-4 md:px-8 z-10 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <button onclick="app.toggleSidebar()" class="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-xl">
+                        <i class="fa-solid fa-bars text-lg"></i>
+                    </button>
+                    <div class="relative max-w-xs md:max-w-md w-full hidden sm:block">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="global-search-input" onkeyup="app.handleGlobalSearch(event)" placeholder="Cari peserta, no sertifikat, UUID, event..." class="w-full pl-9 pr-4 py-2 bg-slate-100 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition border border-transparent focus:border-slate-200">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button onclick="app.openModal('modal-event')" class="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-brand-50 hover:bg-brand-100 text-brand-700 rounded-xl text-xs font-bold transition">
+                        <i class="fa-solid fa-plus"></i> Event Baru
+                    </button>
+                    <button onclick="app.promptQuickVerify()" class="p-2 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-semibold flex items-center gap-1.5" title="Verifikasi Sertifikat">
+                        <i class="fa-solid fa-qrcode text-brand-600"></i>
+                        <span class="hidden md:inline">Cek Sertifikat</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- DYNAMIC VIEW PAGES -->
+            <main class="flex-1 overflow-y-auto p-4 md:p-8 space-y-8" id="main-viewport">
+
+                <!-- 1. DASHBOARD PAGE -->
+                <section id="view-dashboard" class="page-view space-y-6">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight">Dashboard Ringkasan</h2>
+                            <p class="text-xs text-slate-500 mt-1">Metrik performa platform dan aktivitas penerbitan sertifikat digital</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span id="current-date-badge" class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 shadow-sm">
+                                <i class="fa-solid fa-calendar text-brand-500 mr-1.5"></i> Live Cloud
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Stat Cards Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Event</span>
+                                <h3 id="stat-total-events" class="text-2xl font-black text-slate-800 mt-1">0</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-calendar-days"></i>
+                            </div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Peserta</span>
+                                <h3 id="stat-total-participants" class="text-2xl font-black text-slate-800 mt-1">0</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-users"></i>
+                            </div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Sertifikat Terbit</span>
+                                <h3 id="stat-total-certs" class="text-2xl font-black text-slate-800 mt-1">0</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-certificate"></i>
+                            </div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Terverifikasi</span>
+                                <h3 id="stat-verified-certs" class="text-2xl font-black text-slate-800 mt-1">0</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-shield-check"></i>
+                            </div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Dicabut (Revoked)</span>
+                                <h3 id="stat-revoked-certs" class="text-2xl font-black text-slate-800 mt-1">0</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-ban"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-chart-line text-brand-600"></i> Trend Penerbitan Sertifikat
+                            </h3>
+                            <div class="h-64 relative">
+                                <canvas id="chart-monthly-trend"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-chart-pie text-brand-600"></i> Sertifikat per Event
+                            </h3>
+                            <div class="h-64 relative flex items-center justify-center">
+                                <canvas id="chart-event-dist"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity Logs Table -->
+                    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-clock-rotate-left text-brand-600"></i> Aktivitas Sistem Terkini
+                            </h3>
+                            <button onclick="app.navigate('logs')" class="text-xs font-bold text-brand-600 hover:underline">Lihat Semua Log</button>
+                        </div>
+                        <div class="divide-y divide-slate-100 text-xs" id="dashboard-recent-logs">
+                            <div class="p-4 text-center text-slate-400">Belum ada aktivitas tercatat.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. EVENTS MANAGEMENT PAGE -->
+                <section id="view-events" class="page-view space-y-6 hidden">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight">Manajemen Event & Kegiatan</h2>
+                            <p class="text-xs text-slate-500 mt-1">Kelola daftar event, prefix nomor sertifikat, dan tanggal kegiatan</p>
+                        </div>
+                        <button onclick="app.openModal('modal-event')" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-brand-500/20 flex items-center gap-2">
+                            <i class="fa-solid fa-calendar-plus"></i> Tambah Event Baru
+                        </button>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row gap-3">
+                        <input type="text" id="event-search" onkeyup="app.renderEvents()" placeholder="Cari nama event atau penyelenggara..." class="flex-1 px-4 py-2 bg-slate-50 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <select id="event-filter-status" onchange="app.renderEvents()" class="px-4 py-2 bg-slate-50 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            <option value="ALL">Semua Status</option>
+                            <option value="Active">Active</option>
+                            <option value="Draft">Draft</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Archived">Archived</option>
+                        </select>
+                    </div>
+
+                    <div id="events-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                </section>
+
+                <!-- 3. PARTICIPANTS MANAGEMENT PAGE -->
+                <section id="view-participants" class="page-view space-y-6 hidden">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight">Manajemen Peserta</h2>
+                            <p class="text-xs text-slate-500 mt-1">Kelola data peserta, impor dari file CSV/Excel, dan status kehadiran</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="app.openImportCSVModal()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-csv text-emerald-600"></i> Import CSV
+                            </button>
+                            <button onclick="app.openModal('modal-participant')" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-brand-500/20 flex items-center gap-2">
+                                <i class="fa-solid fa-user-plus"></i> Tambah Peserta
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row gap-3">
+                        <div class="md:w-72">
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pilih Event Kegiatan</label>
+                            <select id="participant-event-filter" onchange="app.renderParticipants()" class="w-full px-3 py-2 bg-slate-50 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 font-semibold"></select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Cari Peserta</label>
+                            <input type="text" id="participant-search" onkeyup="app.renderParticipants()" placeholder="Nama, email, instansi..." class="w-full px-4 py-2 bg-slate-50 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                    </div>
+
+                    <div id="participant-bulk-bar" class="hidden bg-brand-900 text-white p-3 rounded-2xl flex items-center justify-between text-xs shadow-lg">
+                        <span id="bulk-selected-count" class="font-bold">0 peserta dipilih</span>
+                        <div class="flex items-center gap-2">
+                            <button onclick="app.generateBulkCertificates()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition flex items-center gap-1">
+                                <i class="fa-solid fa-certificate"></i> Generate Sertifikat Terpilih
+                            </button>
+                            <button onclick="app.deleteBulkParticipants()" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold transition">
+                                Hapus
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                                    <tr>
+                                        <th class="p-4 w-10 text-center"><input type="checkbox" id="check-all-participants" onclick="app.toggleCheckAllParticipants(this)"></th>
+                                        <th class="p-4">Nama Peserta</th>
+                                        <th class="p-4">Kontak & Email</th>
+                                        <th class="p-4">Instansi & Jabatan</th>
+                                        <th class="p-4">Kehadiran</th>
+                                        <th class="p-4">Status Sertifikat</th>
+                                        <th class="p-4 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="participants-table-body" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. TEMPLATE EDITOR PAGE -->
+                <section id="view-templates" class="page-view space-y-6 hidden">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight">Template Certificate Builder</h2>
+                            <p class="text-xs text-slate-500 mt-1">Desain tata letak sertifikat dengan ukuran otomatis menyesuaikan foto desain yang di-upload</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="app.openShareClaimModal()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-emerald-500/20 flex items-center gap-2">
+                                <i class="fa-solid fa-share-nodes"></i> Bagikan Link Buat Sendiri
+                            </button>
+                            <button onclick="app.saveCurrentTemplate()" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-brand-500/20 flex items-center gap-2">
+                                <i class="fa-solid fa-floppy-disk"></i> Simpan Desain Template
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        <div class="lg:col-span-1 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-5">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Event Kegiatan</label>
+                                <select id="tmpl-editor-event-select" onchange="app.loadTemplateForEvent()" class="w-full px-3 py-2 bg-slate-50 rounded-xl text-xs border border-slate-200 font-semibold focus:ring-2 focus:ring-brand-500"></select>
+                            </div>
+                            <hr class="border-slate-100">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Background Image (Foto Desain)</label>
+                                <input type="file" id="tmpl-bg-file" accept="image/*" onchange="app.handleBackgroundUpload(event)" class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
+                                <div id="tmpl-dim-badge" class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-50 text-brand-700 font-mono text-[11px] font-bold rounded-lg border border-brand-200">
+                                    <i class="fa-solid fa-ruler-combined"></i> Dimensi: 1920 x 1080 px
+                                </div>
+                                <p class="text-[10px] text-slate-400 mt-1">Ukuran sertifikat & canvas otomatis menyesuaikan resolusi asli foto desain.</p>
+                            </div>
+                            <hr class="border-slate-100">
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold text-slate-700">Tambah Elemen Atribut</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button onclick="app.addTemplateElement('text', 'fullName')" class="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-user text-brand-500"></i> Nama Peserta
+                                    </button>
+                                    <button onclick="app.addTemplateElement('text', 'certificateNumber')" class="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-hashtag text-brand-500"></i> No Sertifikat
+                                    </button>
+                                    <button onclick="app.addTemplateElement('text', 'eventName')" class="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-calendar text-brand-500"></i> Nama Event
+                                    </button>
+                                    <button onclick="app.addTemplateElement('text', 'issueDate')" class="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-clock text-brand-500"></i> Tanggal
+                                    </button>
+                                    <button onclick="app.addTemplateElement('qrcode', 'qrCode')" class="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-1.5 col-span-2">
+                                        <i class="fa-solid fa-qrcode text-brand-500"></i> QR Code Verification
+                                    </button>
+                                </div>
+                            </div>
+                            <hr class="border-slate-100">
+                            <div id="element-inspector" class="space-y-3">
+                                <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Inspektor Elemen</h4>
+                                <p id="inspector-none" class="text-xs text-slate-400 italic">Pilih elemen pada canvas untuk mengubah atribut.</p>
+                                <div id="inspector-fields" class="space-y-3 hidden text-xs">
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label class="block text-[10px] text-slate-400 font-bold">Posisi X (px)</label>
+                                            <input type="number" id="prop-x" onchange="app.updateSelectedProp('x', this.value)" class="w-full px-2 py-1 bg-slate-50 border rounded-lg">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] text-slate-400 font-bold">Posisi Y (px)</label>
+                                            <input type="number" id="prop-y" onchange="app.updateSelectedProp('y', this.value)" class="w-full px-2 py-1 bg-slate-50 border rounded-lg">
+                                        </div>
+                                    </div>
+                                    <div id="prop-text-group" class="space-y-2">
+                                        <div>
+                                            <label class="block text-[10px] text-slate-400 font-bold">Ukuran Font (px)</label>
+                                            <input type="number" id="prop-size" onchange="app.updateSelectedProp('fontSize', this.value)" class="w-full px-2 py-1 bg-slate-50 border rounded-lg">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] text-slate-400 font-bold">Warna Teks</label>
+                                            <input type="color" id="prop-color" onchange="app.updateSelectedProp('color', this.value)" class="w-full h-8 bg-slate-50 border rounded-lg cursor-pointer p-0">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] text-slate-400 font-bold">Font Family</label>
+                                            <select id="prop-font" onchange="app.updateSelectedProp('fontFamily', this.value)" class="w-full px-2 py-1 bg-slate-50 border rounded-lg">
+                                                <option value="Plus Jakarta Sans">Plus Jakarta Sans</option>
+                                                <option value="Playfair Display">Playfair Display (Serif)</option>
+                                                <option value="Montserrat">Montserrat</option>
+                                                <option value="Arial">Arial</option>
+                                                <option value="Georgia">Georgia</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button onclick="app.deleteSelectedElement()" class="w-full py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-lg text-xs transition">
+                                        Hapus Elemen Ini
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="lg:col-span-3 bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col items-center justify-center min-h-[500px] overflow-hidden relative">
+                            <div class="text-xs text-slate-400 mb-2 flex items-center justify-between w-full">
+                                <span id="tmpl-canvas-header-info"><i class="fa-solid fa-expand mr-1"></i> Live Render Area (<span id="tmpl-res-text" class="font-mono font-bold text-slate-200">1920 x 1080</span> px)</span>
+                                <span class="text-brand-400"><i class="fa-solid fa-hand-pointer mr-1"></i> Klik & Geser untuk atur posisi</span>
+                            </div>
+                            <div id="tmpl-canvas-wrapper" class="relative w-full max-w-4xl bg-white shadow-2xl rounded-lg overflow-hidden border border-slate-600 flex items-center justify-center">
+                                <canvas id="template-editor-canvas" width="1920" height="1080" class="w-full h-auto max-h-[550px] object-contain cursor-crosshair"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. CERTIFICATES ISSUED PAGE -->
+                <section id="view-certificates" class="page-view space-y-6 hidden">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight">Daftar Sertifikat Terbit</h2>
+                            <p class="text-xs text-slate-500 mt-1">Cari, unduh PDF/PNG, salin link verifikasi, atau cabut sertifikat</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row gap-3">
+                        <input type="text" id="cert-search" onkeyup="app.renderCertificates()" placeholder="Cari nomor sertifikat, nama penerima, UUID..." class="flex-1 px-4 py-2 bg-slate-50 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <select id="cert-filter-status" onchange="app.renderCertificates()" class="px-4 py-2 bg-slate-50 rounded-xl text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            <option value="ALL">Semua Status</option>
+                            <option value="valid">Valid</option>
+                            <option value="revoked">Revoked (Dicabut)</option>
+                        </select>
+                    </div>
+
+                    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                                    <tr>
+                                        <th class="p-4">Nomor Sertifikat</th>
+                                        <th class="p-4">Penerima</th>
+                                        <th class="p-4">Kegiatan / Event</th>
+                                        <th class="p-4">Tgl Terbit</th>
+                                        <th class="p-4">Status</th>
+                                        <th class="p-4 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="certificates-table-body" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. USER & ROLE MANAGEMENT PAGE -->
+                <section id="view-users" class="page-view space-y-6 hidden">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight">Manajemen Pengguna & Role</h2>
+                            <p class="text-xs text-slate-500 mt-1">Kelola pengguna sistem dan peran hak akses</p>
+                        </div>
+                        <button onclick="app.openModal('modal-user')" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-brand-500/20 flex items-center gap-2">
+                            <i class="fa-solid fa-user-plus"></i> Tambah User Baru
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                                    <tr>
+                                        <th class="p-4">Pengguna</th>
+                                        <th class="p-4">Email</th>
+                                        <th class="p-4">Role Hak Akses</th>
+                                        <th class="p-4">Status</th>
+                                        <th class="p-4">Tgl Dibuat</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. ACTIVITY LOGS PAGE -->
+                <section id="view-logs" class="page-view space-y-6 hidden">
+                    <div>
+                        <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight">System Activity Logs</h2>
+                        <p class="text-xs text-slate-500 mt-1">Jejak audit otomatis seluruh tindakan pengguna dalam sistem</p>
+                    </div>
+
+                    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden p-6">
+                        <div class="space-y-4" id="full-activity-logs-list"></div>
+                    </div>
+                </section>
+
+                <!-- 8. SETTINGS PAGE -->
+                <section id="view-settings" class="page-view space-y-6 hidden">
+                    <div>
+                        <h2 class="text-2xl font-extrabold text-slate-800 tracking-tight">Pengaturan Platform</h2>
+                        <p class="text-xs text-slate-500 mt-1">Konfigurasi umum dan integrasi pihak ketiga</p>
+                    </div>
+
+                    <div class="max-w-3xl bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6">
+                        <form onsubmit="app.saveSettings(event)" class="space-y-4">
+                            <h3 class="text-sm font-bold text-slate-800 border-b pb-2">Identitas Organisasi</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                <div>
+                                    <label class="block font-bold text-slate-600 mb-1">Nama Platform</label>
+                                    <input type="text" id="set-platform-name" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-600 mb-1">Nama Organisasi / Instansi</label>
+                                    <input type="text" id="set-org-name" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-600 mb-1">Email Resmi Kontak</label>
+                                    <input type="email" id="set-org-email" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-600 mb-1">WhatsApp Helpdesk</label>
+                                    <input type="text" id="set-org-phone" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                                </div>
+                            </div>
+                            <div class="pt-4 flex justify-end">
+                                <button type="submit" class="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-500/20">
+                                    Simpan Perubahan
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL CONTAINERS -->
+    <div id="modal-event" class="hidden fixed inset-0 z-[8000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white max-w-lg w-full rounded-3xl shadow-2xl p-6 border border-slate-100 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 id="modal-event-title" class="text-base font-bold text-slate-800">Tambah Event Baru</h3>
+                <button onclick="app.closeModal('modal-event')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="app.handleSaveEvent(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="event-form-id">
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Nama Kegiatan / Event</label>
+                    <input type="text" id="event-form-name" required class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Penyelenggara</label>
+                    <input type="text" id="event-form-organizer" required class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Tanggal Mulai</label>
+                        <input type="date" id="event-form-start" required class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Tanggal Selesai</label>
+                        <input type="date" id="event-form-end" required class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Prefix Nomor Sertifikat</label>
+                        <input type="text" id="event-form-prefix" required placeholder="CERT/2026/AI/" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Nomor Awal Counter</label>
+                        <input type="number" id="event-form-counter" value="1" min="1" required class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Deskripsi Kegiatan</label>
+                    <textarea id="event-form-desc" rows="2" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200"></textarea>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Status Event</label>
+                    <select id="event-form-status" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 font-semibold">
+                        <option value="Active">Active</option>
+                        <option value="Draft">Draft</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Archived">Archived</option>
+                    </select>
+                </div>
+                <div class="pt-3 flex justify-end gap-2">
+                    <button type="button" onclick="app.closeModal('modal-event')" class="px-4 py-2 bg-slate-100 rounded-xl font-bold">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold shadow-md">Simpan Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Participant -->
+    <div id="modal-participant" class="hidden fixed inset-0 z-[8000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white max-w-md w-full rounded-3xl shadow-2xl p-6 border border-slate-100 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-base font-bold text-slate-800">Form Data Peserta</h3>
+                <button onclick="app.closeModal('modal-participant')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="app.handleSaveParticipant(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="part-form-id">
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Nama Lengkap & Gelar</label>
+                    <input type="text" id="part-form-name" required class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Email Peserta</label>
+                    <input type="email" id="part-form-email" required class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">No WhatsApp</label>
+                        <input type="text" id="part-form-phone" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Status Kehadiran</label>
+                        <select id="part-form-attendance" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 font-semibold">
+                            <option value="Present">Present (Hadir)</option>
+                            <option value="Absent">Absent (Absen)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Instansi / Organisasi</label>
+                        <input type="text" id="part-form-inst" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Jabatan / Peran</label>
+                        <input type="text" id="part-form-pos" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                    </div>
+                </div>
+                <div class="pt-3 flex justify-end gap-2">
+                    <button type="button" onclick="app.closeModal('modal-participant')" class="px-4 py-2 bg-slate-100 rounded-xl font-bold">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold shadow-md">Simpan Peserta</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: CSV Import -->
+    <div id="modal-import-csv" class="hidden fixed inset-0 z-[8000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white max-w-lg w-full rounded-3xl shadow-2xl p-6 border border-slate-100 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-base font-bold text-slate-800"><i class="fa-solid fa-file-csv text-emerald-600"></i> Import Peserta via CSV</h3>
+                <button onclick="app.closeModal('modal-import-csv')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <p class="text-slate-500">Unggah file <code>.csv</code> dengan header kolom: <code class="bg-slate-100 px-1 py-0.5 rounded text-brand-600 font-mono">nama, email, telepon, instansi, jabatan</code></p>
+                <input type="file" id="csv-file-input" accept=".csv" onchange="app.handleCSVFileSelected(event)" class="w-full p-2 bg-slate-50 rounded-xl border border-slate-200">
+                <div id="csv-preview-container" class="hidden max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50 text-[11px]"></div>
+                <div class="pt-3 flex justify-end gap-2">
+                    <button type="button" onclick="app.closeModal('modal-import-csv')" class="px-4 py-2 bg-slate-100 rounded-xl font-bold">Batal</button>
+                    <button type="button" onclick="app.processCSVImport()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md">Jalankan Import</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add User -->
+    <div id="modal-user" class="hidden fixed inset-0 z-[8000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white max-w-md w-full rounded-3xl shadow-2xl p-6 border border-slate-100 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-base font-bold text-slate-800">Kelola Pengguna System</h3>
+                <button onclick="app.closeModal('modal-user')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="app.handleSaveUser(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="user-form-id">
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Nama Pengguna</label>
+                    <input type="text" id="user-form-name" required class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Email Pengguna</label>
+                    <input type="email" id="user-form-email" required class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Role Hak Akses</label>
+                    <select id="user-form-role" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 font-semibold">
+                        <option value="superadmin">Superadmin (Akses Penuh)</option>
+                        <option value="admin">Admin (Event & Template Manager)</option>
+                        <option value="operator">Operator (Peserta & Sertifikat)</option>
+                        <option value="viewer">Viewer (Read Only)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Status Akun</label>
+                    <select id="user-form-status" class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 font-semibold">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="pt-3 flex justify-end gap-2">
+                    <button type="button" onclick="app.closeModal('modal-user')" class="px-4 py-2 bg-slate-100 rounded-xl font-bold">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold shadow-md">Simpan User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Revoke -->
+    <div id="modal-revoke" class="hidden fixed inset-0 z-[8000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white max-w-md w-full rounded-3xl shadow-2xl p-6 border border-slate-100 space-y-4">
+            <h3 class="text-base font-bold text-red-600 flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation"></i> Pencabutan Sertifikat</h3>
+            <p class="text-xs text-slate-600">Sertifikat yang dicabut akan ditandai sebagai REVOKED pada halaman verifikasi publik.</p>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Alasan Pencabutan</label>
+                <textarea id="revoke-reason-input" rows="3" required class="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs" placeholder="Contoh: Terjadi kesalahan data nama peserta..."></textarea>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="app.closeModal('modal-revoke')" class="px-4 py-2 bg-slate-100 rounded-xl text-xs font-bold">Batal</button>
+                <button onclick="app.confirmRevokeCertificate()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-md">Ya, Cabut Sertifikat</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Share Self-Claim Link -->
+    <div id="modal-share-claim" class="hidden fixed inset-0 z-[8000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white max-w-lg w-full rounded-3xl shadow-2xl p-6 md:p-8 border border-slate-100 space-y-5">
+            <div class="flex items-start justify-between">
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="p-2 bg-emerald-50 text-emerald-600 rounded-xl text-base"><i class="fa-solid fa-share-nodes"></i></span>
+                        <h3 class="text-lg font-bold text-slate-800">Bagikan Link Buat Sendiri</h3>
+                    </div>
+                    <p class="text-xs text-slate-500">Teman-teman atau peserta dapat menginput nama sendiri & mengunduh sertifikat beresolusi maksimal.</p>
+                </div>
+                <button onclick="app.closeModal('modal-share-claim')" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Event Terpilih</span>
+                <div class="flex items-center justify-between">
+                    <strong id="share-modal-event-name" class="text-sm text-slate-800">-</strong>
+                    <span id="share-modal-res-badge" class="px-2 py-0.5 bg-brand-50 text-brand-700 font-mono text-[10px] font-bold rounded">1920x1080 px</span>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-xs font-bold text-slate-700">Link Publik Pembuatan Sertifikat</label>
+                <div class="flex items-center gap-2">
+                    <input type="text" id="share-claim-url-input" readonly class="flex-1 px-3 py-2.5 bg-slate-100 rounded-xl border border-slate-200 text-xs font-mono text-slate-700 select-all">
+                    <button onclick="app.copyShareClaimURL()" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-copy"></i> Salin
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-center gap-4 bg-emerald-50/60 p-4 rounded-2xl border border-emerald-100">
+                <div id="share-modal-qrcode" class="w-24 h-24 bg-white p-2 rounded-xl shadow-sm border border-emerald-100 flex items-center justify-center flex-shrink-0"></div>
+                <div class="space-y-2 flex-1 text-center sm:text-left">
+                    <h5 class="text-xs font-bold text-emerald-950">Scan QR Code Langsung</h5>
+                    <p class="text-[11px] text-emerald-800">Scan QR ini menggunakan kamera smartphone untuk langsung membuka halaman pengisian nama.</p>
+                    <div class="flex flex-wrap gap-2 justify-center sm:justify-start pt-1">
+                        <button onclick="app.shareViaWhatsApp()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
+                            <i class="fa-brands fa-whatsapp"></i> Kirim ke WhatsApp
+                        </button>
+                        <button onclick="app.openPublicClaimPage()" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Buka Halaman
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-2 flex justify-end">
+                <button onclick="app.closeModal('modal-share-claim')" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold">
+                    Selesai
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Container for SVG QR Code Generation -->
+    <div id="qrcode-hidden-container" class="hidden"></div>
+
+    <!-- MAIN APPLICATION SCRIPT MODULE -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAnalytics, isSupported } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        /* ===============================
+           UPDATED FIREBASE CONFIGURATION
+        ================================ */
+        const firebaseConfig = {
+            apiKey: "AIzaSyDpv0YX7M6lzGFQ2_owxOprqpv1dp_9DX4",
+            authDomain: "certifyhub-bf543.firebaseapp.com",
+            projectId: "certifyhub-bf543",
+            storageBucket: "certifyhub-bf543.firebasestorage.app",
+            messagingSenderId: "580847385718",
+            appId: "1:580847385718:web:65a194b7780597cb713357",
+            measurementId: "G-P9CYP63HHS"
+        };
+
+        const CONFIG = {
+            firebase: firebaseConfig,
+            cloudinary: {
+                cloudName: "YOUR_CLOUD_NAME",
+                uploadPreset: "YOUR_UPLOAD_PRESET"
+            }
+        };
+
+        /* ===============================
+           GLOBAL STATE MANAGEMENT
+        ================================ */
+        window.appState = {
+            currentUser: null,
+            userRole: 'superadmin',
+            currentView: 'dashboard',
+            isDemoMode: false,
+            isOffline: !navigator.onLine,
+            events: [],
+            participants: [],
+            certificates: [],
+            templates: [],
+            users: [],
+            activityLogs: [],
+            settings: {
+                platformName: "CertifyHub",
+                orgName: "CertifyHub Enterprise",
+                orgEmail: "support@certifyhub.com",
+                orgPhone: "08123456789"
+            },
+            selectedEventId: null,
+            selectedTemplateElementId: null,
+            revokeCertTargetId: null,
+            csvParsedData: []
+        };
+
+        // Firebase Instances
+        let firebaseApp = null;
+        let auth = null;
+        let db = null;
+        let analytics = null;
+
+        /* Initialize Firebase */
+        async function initFirebase() {
+            try {
+                firebaseApp = initializeApp(CONFIG.firebase);
+                auth = getAuth(firebaseApp);
+                db = getFirestore(firebaseApp);
+                
+                isSupported().then(supported => {
+                    if (supported) {
+                        analytics = getAnalytics(firebaseApp);
+                    }
+                }).catch(() => {});
+
+                window.appState.isDemoMode = false;
+                document.getElementById('demo-banner').classList.add('hidden');
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        window.appState.currentUser = user;
+                        await loadUserData(user.uid);
+                        document.getElementById('view-auth').classList.add('hidden');
+                        await refreshAllData();
+                    } else {
+                        window.appState.currentUser = null;
+                        document.getElementById('view-auth').classList.remove('hidden');
+                        loadDemoLocalData();
+                        renderCurrentView();
+                    }
+                });
+            } catch (err) {
+                console.warn("Firebase Init fallback to local storage:", err);
+                enableDemoMode();
+            }
+        }
+
+        function enableDemoMode() {
+            window.appState.isDemoMode = true;
+            document.getElementById('demo-banner').classList.remove('hidden');
+            loadDemoLocalData();
+        }
+
+        async function loadUserData(uid) {
+            try {
+                const userDoc = await getDoc(doc(db, "users", uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    window.appState.userRole = data.role || 'operator';
+                    document.getElementById('user-name').innerText = data.name || 'User';
+                    document.getElementById('user-role-badge').innerText = (data.role || 'OPERATOR').toUpperCase();
+                }
+            } catch (e) {
+                console.error("Error loading user profile:", e);
+            }
+        }
+
+        function loadDemoLocalData() {
+            const localEvents = localStorage.getItem('ch_demo_events');
+            if (!localEvents) {
+                window.appState.events = [{
+                    eventId: "evt_demo_1",
+                    name: "Seminar Nasional Web & Cloud Architecture 2026",
+                    organizer: "CertifyHub Academy",
+                    startDate: "2026-08-27",
+                    endDate: "2026-08-28",
+                    certificatePrefix: "CERT/2026/WEB/",
+                    certificateCounter: 3,
+                    status: "Active",
+                    description: "Kegiatan sertifikasi komprehensif arsitektur cloud terdistribusi."
+                }];
+                window.appState.participants = [
+                    { participantId: "part_1", eventId: "evt_demo_1", fullName: "Dr. Budi Santoso", email: "budi@univ.ac.id", phone: "0812345678", institution: "Universitas Indonesia", position: "Dosen", attendanceStatus: "Present", certificateGenerated: true },
+                    { participantId: "part_2", eventId: "evt_demo_1", fullName: "Siti Aminah, S.Kom", email: "siti@tech.co.id", phone: "0898765432", institution: "Tech Solution", position: "Developer", attendanceStatus: "Present", certificateGenerated: false }
+                ];
+                window.appState.certificates = [
+                    { certificateId: "cert_1", eventId: "evt_demo_1", participantId: "part_1", uuid: "d9b2f4a1-0000-4000-8000-123456789abc", certificateNumber: "CERT/2026/WEB/000001", recipientName: "Dr. Budi Santoso", eventName: "Seminar Nasional Web & Cloud Architecture 2026", issueDate: "2026-08-27", status: "valid", imageUrl: "" }
+                ];
+                window.appState.users = [
+                    { uid: "usr_1", name: "Super Admin", email: "admin@certifyhub.com", role: "superadmin", status: "active", createdAt: "2026-08-27" }
+                ];
+                saveDemoLocalData();
+            } else {
+                window.appState.events = JSON.parse(localStorage.getItem('ch_demo_events') || '[]');
+                window.appState.participants = JSON.parse(localStorage.getItem('ch_demo_participants') || '[]');
+                window.appState.certificates = JSON.parse(localStorage.getItem('ch_demo_certificates') || '[]');
+                window.appState.templates = JSON.parse(localStorage.getItem('ch_demo_templates') || '[]');
+                window.appState.users = JSON.parse(localStorage.getItem('ch_demo_users') || '[]');
+                window.appState.activityLogs = JSON.parse(localStorage.getItem('ch_demo_logs') || '[]');
+            }
+            if (window.appState.events.length > 0) {
+                window.appState.selectedEventId = window.appState.events[0].eventId;
+            }
+        }
+
+        function saveDemoLocalData() {
+            localStorage.setItem('ch_demo_events', JSON.stringify(window.appState.events));
+            localStorage.setItem('ch_demo_participants', JSON.stringify(window.appState.participants));
+            localStorage.setItem('ch_demo_certificates', JSON.stringify(window.appState.certificates));
+            localStorage.setItem('ch_demo_templates', JSON.stringify(window.appState.templates));
+            localStorage.setItem('ch_demo_users', JSON.stringify(window.appState.users));
+            localStorage.setItem('ch_demo_logs', JSON.stringify(window.appState.activityLogs));
+        }
+
+        async function refreshAllData() {
+            if (window.appState.isDemoMode || !db) {
+                loadDemoLocalData();
+                renderCurrentView();
+                return;
+            }
+            showLoader("Memuat data dari cloud...");
+            try {
+                const evSnap = await getDocs(collection(db, "events"));
+                window.appState.events = evSnap.docs.map(d => d.data());
+
+                const ptSnap = await getDocs(collection(db, "participants"));
+                window.appState.participants = ptSnap.docs.map(d => d.data());
+
+                const ctSnap = await getDocs(collection(db, "certificates"));
+                window.appState.certificates = ctSnap.docs.map(d => d.data());
+
+                const tmSnap = await getDocs(collection(db, "templates"));
+                window.appState.templates = tmSnap.docs.map(d => d.data());
+
+                const usSnap = await getDocs(collection(db, "users"));
+                window.appState.users = usSnap.docs.map(d => d.data());
+
+                const lgSnap = await getDocs(query(collection(db, "activityLogs"), orderBy("timestamp", "desc"), limit(50)));
+                window.appState.activityLogs = lgSnap.docs.map(d => d.data());
+
+                if (window.appState.events.length > 0 && !window.appState.selectedEventId) {
+                    window.appState.selectedEventId = window.appState.events[0].eventId;
+                }
+            } catch (err) {
+                console.warn("Firestore fetch error, utilizing local state:", err);
+                loadDemoLocalData();
+            } finally {
+                hideLoader();
+                renderCurrentView();
+            }
+        }
+
+        async function logActivity(action, module, targetId, metadata = {}) {
+            const logObj = {
+                logId: "log_" + Date.now(),
+                userId: window.appState.currentUser ? window.appState.currentUser.uid : "user_admin",
+                userName: window.appState.currentUser ? (window.appState.currentUser.email || "Admin") : "Admin",
+                action,
+                module,
+                targetId,
+                timestamp: new Date().toISOString(),
+                metadata
+            };
+            window.appState.activityLogs.unshift(logObj);
+
+            if (!window.appState.isDemoMode && db) {
+                try {
+                    await setDoc(doc(db, "activityLogs", logObj.logId), logObj);
+                } catch(e){}
+            } else {
+                saveDemoLocalData();
+            }
+        }
+
+        function showToast(message, type = "info") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgMap = {
+                success: 'bg-emerald-600 text-white',
+                error: 'bg-red-600 text-white',
+                warning: 'bg-amber-500 text-white',
+                info: 'bg-slate-800 text-white'
+            };
+            const iconMap = {
+                success: 'fa-circle-check',
+                error: 'fa-circle-xmark',
+                warning: 'fa-triangle-exclamation',
+                info: 'fa-circle-info'
+            };
+            toast.className = `p-4 rounded-2xl shadow-xl flex items-center gap-3 text-xs font-semibold pointer-events-auto transition-all duration-300 transform ${bgMap[type] || bgMap.info}`;
+            toast.innerHTML = `<i class="fa-solid ${iconMap[type]} text-base"></i> <span class="flex-1">${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-10px]');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        function showLoader(msg = "Memproses...", showProgress = false) {
+            document.getElementById('loader-message').innerText = msg;
+            const pBar = document.getElementById('loader-progress-container');
+            if (showProgress) pBar.classList.remove('hidden');
+            else pBar.classList.add('hidden');
+            document.getElementById('global-loader').classList.remove('hidden');
+        }
+
+        function updateLoaderProgress(percent, subtext = "") {
+            document.getElementById('loader-progress-bar').style.width = percent + "%";
+            document.getElementById('loader-submessage').innerText = subtext;
+        }
+
+        function hideLoader() {
+            document.getElementById('global-loader').classList.add('hidden');
+            document.getElementById('loader-progress-bar').style.width = "0%";
+            document.getElementById('loader-submessage').innerText = "";
+        }
+
+        async function renderCertificateCanvas(participant, template, eventData, certNumber, certUUID) {
+            const canvas = document.createElement('canvas');
+            const canvasWidth = (template && template.width) ? template.width : 1920;
+            const canvasHeight = (template && template.height) ? template.height : 1080;
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            const ctx = canvas.getContext('2d');
+
+            if (template && template.bgImage) {
+                try {
+                    const bgImg = await loadImage(template.bgImage);
+                    if (bgImg) {
+                        ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+                    } else {
+                        drawDefaultCertificateBorder(ctx, canvas.width, canvas.height);
+                    }
+                } catch(e) {
+                    drawDefaultCertificateBorder(ctx, canvas.width, canvas.height);
+                }
+            } else {
+                drawDefaultCertificateBorder(ctx, canvas.width, canvas.height);
+            }
+
+            const defaultElements = [
+                { id: 'el_title', type: 'text', field: 'certificateTitle', x: Math.round(canvasWidth * 0.5), y: Math.round(canvasHeight * 0.25), fontSize: Math.round(canvasWidth * 0.024), color: '#1e3a8a', fontFamily: 'Playfair Display', align: 'center' },
+                { id: 'el_no', type: 'text', field: 'certificateNumber', x: Math.round(canvasWidth * 0.5), y: Math.round(canvasHeight * 0.33), fontSize: Math.round(canvasWidth * 0.012), color: '#475569', fontFamily: 'Plus Jakarta Sans', align: 'center' },
+                { id: 'el_given', type: 'text', text: 'Diberikan Kepada:', x: Math.round(canvasWidth * 0.5), y: Math.round(canvasHeight * 0.42), fontSize: Math.round(canvasWidth * 0.011), color: '#64748b', fontFamily: 'Plus Jakarta Sans', align: 'center' },
+                { id: 'el_name', type: 'text', field: 'fullName', x: Math.round(canvasWidth * 0.5), y: Math.round(canvasHeight * 0.50), fontSize: Math.round(canvasWidth * 0.035), color: '#0f172a', fontFamily: 'Playfair Display', align: 'center' },
+                { id: 'el_event', type: 'text', field: 'eventName', x: Math.round(canvasWidth * 0.5), y: Math.round(canvasHeight * 0.62), fontSize: Math.round(canvasWidth * 0.016), color: '#334155', fontFamily: 'Montserrat', align: 'center' },
+                { id: 'el_date', type: 'text', field: 'issueDate', x: Math.round(canvasWidth * 0.5), y: Math.round(canvasHeight * 0.70), fontSize: Math.round(canvasWidth * 0.011), color: '#64748b', fontFamily: 'Plus Jakarta Sans', align: 'center' },
+                { id: 'el_qr', type: 'qrcode', x: Math.round(canvasWidth * 0.82), y: Math.round(canvasHeight * 0.72), size: Math.round(canvasWidth * 0.09) }
+            ];
+
+            const elements = (template && template.elements && template.elements.length > 0) ? template.elements : defaultElements;
+
+            for (const el of elements) {
+                if (el.type === 'text') {
+                    let textValue = el.text || '';
+                    if (el.field === 'fullName') textValue = participant.fullName || 'Nama Lengkap Peserta';
+                    else if (el.field === 'certificateNumber') textValue = certNumber;
+                    else if (el.field === 'eventName') textValue = eventData ? eventData.name : 'Nama Kegiatan / Seminar';
+                    else if (el.field === 'issueDate') textValue = "Diterbitkan pada: " + (eventData ? (eventData.startDate || eventData.endDate) : "27 Agustus 2026");
+                    else if (el.field === 'certificateTitle') textValue = "SERTIFIKAT PENGHARGAAN";
+                    else if (el.field === 'institution') textValue = participant.institution || '';
+
+                    ctx.save();
+                    ctx.font = `bold ${el.fontSize || 32}px '${el.fontFamily || 'Plus Jakarta Sans'}', sans-serif`;
+                    ctx.fillStyle = el.color || '#1e293b';
+                    ctx.textAlign = el.align || 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(textValue, el.x, el.y);
+                    ctx.restore();
+                } else if (el.type === 'qrcode') {
+                    const verifyUrl = `${window.location.origin}${window.location.pathname}?verify=${certUUID}`;
+                    const qrSize = el.size || Math.round(canvasWidth * 0.09);
+                    const qrDataUrl = await generateQRCodeDataURL(verifyUrl, qrSize);
+                    if (qrDataUrl) {
+                        const qrImg = await loadImage(qrDataUrl);
+                        if (qrImg) {
+                            ctx.save();
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(el.x - 4, el.y - 4, qrSize + 8, qrSize + 8);
+                            ctx.drawImage(qrImg, el.x, el.y, qrSize, qrSize);
+                            ctx.restore();
+                        }
+                    }
+                }
+            }
+
+            return canvas;
+        }
+
+        function drawDefaultCertificateBorder(ctx, w, h) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+            ctx.strokeStyle = '#2563eb';
+            ctx.lineWidth = Math.max(8, Math.round(w * 0.008));
+            ctx.strokeRect(w * 0.02, h * 0.03, w * 0.96, h * 0.94);
+            ctx.strokeStyle = '#d97706';
+            ctx.lineWidth = Math.max(3, Math.round(w * 0.003));
+            ctx.strokeRect(w * 0.025, h * 0.038, w * 0.95, h * 0.924);
+        }
+
+        function loadImage(src) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+                img.src = src;
+            });
+        }
+
+        function generateQRCodeDataURL(text, size = 180) {
+            return new Promise((resolve) => {
+                const container = document.getElementById('qrcode-hidden-container');
+                container.innerHTML = '';
+                try {
+                    new QRCode(container, {
+                        text: text,
+                        width: size,
+                        height: size,
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                    setTimeout(() => {
+                        const img = container.querySelector('img');
+                        if (img && img.src) resolve(img.src);
+                        else {
+                            const canvas = container.querySelector('canvas');
+                            resolve(canvas ? canvas.toDataURL() : '');
+                        }
+                    }, 80);
+                } catch(e) { resolve(''); }
+            });
+        }
+
+        function renderCurrentView() {
+            const v = window.appState.currentView;
+            if (v === 'dashboard') window.app.renderDashboard();
+            else if (v === 'events') window.app.renderEvents();
+            else if (v === 'participants') window.app.renderParticipants();
+            else if (v === 'templates') window.app.initTemplateEditor();
+            else if (v === 'certificates') window.app.renderCertificates();
+            else if (v === 'users') window.app.renderUsers();
+            else if (v === 'logs') window.app.renderLogs();
+            else if (v === 'settings') window.app.renderSettings();
+        }
+
+        window.app = {
+            selectedElementId: null,
+            isDraggingCanvasElement: false,
+            dragOffset: { x: 0, y: 0 },
+            currentClaimEventId: null,
+
+            init: function() {
+                initFirebase();
+                this.checkVerifyOrClaimURL();
+                this.navigate('dashboard');
+                this.setupCanvasInteractions();
+            },
+
+            checkVerifyOrClaimURL: async function() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const verifyUUID = urlParams.get('verify');
+                const claimEventId = urlParams.get('claim') || urlParams.get('event');
+
+                if (verifyUUID) {
+                    document.getElementById('view-public-verify').classList.remove('hidden');
+                    document.getElementById('view-public-claim').classList.add('hidden');
+                    await this.performPublicVerification(verifyUUID);
+                } else if (claimEventId) {
+                    document.getElementById('view-public-claim').classList.remove('hidden');
+                    document.getElementById('view-public-verify').classList.add('hidden');
+                    await this.performPublicClaim(claimEventId);
+                }
+            },
+
+            navigate: function(viewName) {
+                window.appState.currentView = viewName;
+                document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+                const target = document.getElementById(`view-${viewName}`);
+                if (target) target.classList.remove('hidden');
+
+                document.querySelectorAll('.nav-item').forEach(el => {
+                    el.classList.remove('bg-brand-600', 'text-white', 'font-bold');
+                    el.classList.add('hover:bg-slate-800', 'text-slate-400');
+                });
+                const activeNav = document.getElementById(`nav-${viewName}`);
+                if (activeNav) {
+                    activeNav.classList.add('bg-brand-600', 'text-white', 'font-bold');
+                    activeNav.classList.remove('hover:bg-slate-800', 'text-slate-400');
+                }
+
+                renderCurrentView();
+            },
+
+            toggleSidebar: function() {
+                document.getElementById('sidebar').classList.toggle('-translate-x-full');
+            },
+
+            renderDashboard: function() {
+                const evs = window.appState.events;
+                const pts = window.appState.participants;
+                const cts = window.appState.certificates;
+
+                document.getElementById('stat-total-events').innerText = evs.length;
+                document.getElementById('stat-total-participants').innerText = pts.length;
+                document.getElementById('stat-total-certs').innerText = cts.length;
+                document.getElementById('stat-verified-certs').innerText = cts.filter(c => c.status === 'valid').length;
+                document.getElementById('stat-revoked-certs').innerText = cts.filter(c => c.status === 'revoked').length;
+
+                const logContainer = document.getElementById('dashboard-recent-logs');
+                if (window.appState.activityLogs.length === 0) {
+                    logContainer.innerHTML = `<div class="p-4 text-center text-slate-400">Belum ada aktivitas.</div>`;
+                } else {
+                    logContainer.innerHTML = window.appState.activityLogs.slice(0, 5).map(l => `
+                        <div class="p-4 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center font-bold">
+                                    <i class="fa-solid fa-bolt text-xs"></i>
+                                </div>
+                                <div>
+                                    <strong class="text-slate-800 font-bold block">${l.action}</strong>
+                                    <span class="text-slate-400 text-[11px]">${l.userName} • ${new Date(l.timestamp).toLocaleTimeString()}</span>
+                                </div>
+                            </div>
+                            <span class="px-2 py-1 bg-slate-100 rounded text-[10px] font-mono">${l.module}</span>
+                        </div>
+                    `).join('');
+                }
+
+                this.initDashboardCharts();
+            },
+
+            initDashboardCharts: function() {
+                const ctx1 = document.getElementById('chart-event-dist');
+                if (ctx1) {
+                    if (window.chartDist) window.chartDist.destroy();
+                    const eventNames = window.appState.events.map(e => e.name.substring(0, 15) + "...");
+                    const counts = window.appState.events.map(e => window.appState.certificates.filter(c => c.eventId === e.eventId).length);
+                    window.chartDist = new Chart(ctx1, {
+                        type: 'doughnut',
+                        data: {
+                            labels: eventNames.length ? eventNames : ['Sample Event'],
+                            datasets: [{
+                                data: counts.length && counts.some(c => c > 0) ? counts : [1],
+                                backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                }
+
+                const ctx2 = document.getElementById('chart-monthly-trend');
+                if (ctx2) {
+                    if (window.chartTrend) window.chartTrend.destroy();
+                    window.chartTrend = new Chart(ctx2, {
+                        type: 'line',
+                        data: {
+                            labels: ['Mei', 'Jun', 'Jul', 'Agu', 'Sep'],
+                            datasets: [{
+                                label: 'Sertifikat Diterbitkan',
+                                data: [3, 8, 12, window.appState.certificates.length || 15, 20],
+                                borderColor: '#3b82f6',
+                                tension: 0.3,
+                                fill: true,
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)'
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                }
+            },
+
+            renderEvents: function() {
+                const search = (document.getElementById('event-search')?.value || '').toLowerCase();
+                const statusFilter = document.getElementById('event-filter-status')?.value || 'ALL';
+
+                const filtered = window.appState.events.filter(e => {
+                    const matchesSearch = e.name.toLowerCase().includes(search) || e.organizer.toLowerCase().includes(search);
+                    const matchesStatus = statusFilter === 'ALL' || e.status === statusFilter;
+                    return matchesSearch && matchesStatus;
+                });
+
+                const grid = document.getElementById('events-grid');
+                if (filtered.length === 0) {
+                    grid.innerHTML = `<div class="col-span-full p-12 text-center text-slate-400 bg-white rounded-2xl border border-dashed">Belum ada data event.</div>`;
+                    return;
+                }
+
+                grid.innerHTML = filtered.map(e => {
+                    const certCount = window.appState.certificates.filter(c => c.eventId === e.eventId).length;
+                    const partCount = window.appState.participants.filter(p => p.eventId === e.eventId).length;
+
+                    return `
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition space-y-4 flex flex-col justify-between">
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-start">
+                                    <span class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase ${e.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-slate-100 text-slate-600'}">${e.status}</span>
+                                    <button onclick="app.openShareClaimModal('${e.eventId}')" class="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg flex items-center gap-1" title="Bagikan Link Buat Sendiri">
+                                        <i class="fa-solid fa-share-nodes"></i> Share
+                                    </button>
+                                </div>
+                                <h3 class="text-base font-bold text-slate-800 leading-snug">${e.name}</h3>
+                                <p class="text-xs text-slate-500 line-clamp-2">${e.description || 'Tidak ada deskripsi.'}</p>
+                            </div>
+                            <div class="space-y-3 pt-3 border-t border-slate-100 text-xs">
+                                <div class="grid grid-cols-2 gap-2 text-slate-600">
+                                    <div><span class="text-slate-400 block text-[10px]">Penyelenggara</span><strong>${e.organizer}</strong></div>
+                                    <div><span class="text-slate-400 block text-[10px]">Prefix No</span><strong class="font-mono">${e.certificatePrefix}</strong></div>
+                                </div>
+                                <div class="flex justify-between items-center text-slate-500 bg-slate-50 p-2 rounded-xl text-[11px]">
+                                    <span><i class="fa-solid fa-users text-purple-500 mr-1"></i> ${partCount} Peserta</span>
+                                    <span><i class="fa-solid fa-certificate text-emerald-500 mr-1"></i> ${certCount} Sertifikat</span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="app.selectEventContext('${e.eventId}', 'participants')" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 font-bold rounded-xl text-center text-slate-700">Kelola Peserta</button>
+                                    <button onclick="app.selectEventContext('${e.eventId}', 'templates')" class="py-2 px-3 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold rounded-xl" title="Desain Template"><i class="fa-solid fa-pen-ruler"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            selectEventContext: function(eventId, targetView) {
+                window.appState.selectedEventId = eventId;
+                this.navigate(targetView);
+            },
+
+            handleSaveEvent: async function(e) {
+                e.preventDefault();
+                const id = document.getElementById('event-form-id').value || ("evt_" + Date.now());
+                const eventObj = {
+                    eventId: id,
+                    name: document.getElementById('event-form-name').value,
+                    organizer: document.getElementById('event-form-organizer').value,
+                    startDate: document.getElementById('event-form-start').value,
+                    endDate: document.getElementById('event-form-end').value,
+                    certificatePrefix: document.getElementById('event-form-prefix').value,
+                    certificateCounter: parseInt(document.getElementById('event-form-counter').value) || 1,
+                    description: document.getElementById('event-form-desc').value,
+                    status: document.getElementById('event-form-status').value,
+                    updatedAt: new Date().toISOString()
+                };
+
+                showLoader("Menyimpan event...");
+                try {
+                    const idx = window.appState.events.findIndex(x => x.eventId === id);
+                    if (idx >= 0) window.appState.events[idx] = eventObj;
+                    else window.appState.events.push(eventObj);
+
+                    if (!window.appState.isDemoMode && db) {
+                        await setDoc(doc(db, "events", id), eventObj);
+                    } else { saveDemoLocalData(); }
+
+                    await logActivity("CREATE_OR_UPDATE_EVENT", "events", id, { name: eventObj.name });
+                    showToast("Event berhasil disimpan!", "success");
+                    this.closeModal('modal-event');
+                    this.renderEvents();
+                } catch(err) {
+                    showToast("Gagal menyimpan event: " + err.message, "error");
+                } finally { hideLoader(); }
+            },
+
+            renderParticipants: function() {
+                const selectFilter = document.getElementById('participant-event-filter');
+                if (selectFilter) {
+                    selectFilter.innerHTML = window.appState.events.map(e => `
+                        <option value="${e.eventId}" ${e.eventId === window.appState.selectedEventId ? 'selected' : ''}>${e.name}</option>
+                    `).join('');
+                    if (!window.appState.selectedEventId && window.appState.events.length) {
+                        window.appState.selectedEventId = window.appState.events[0].eventId;
+                    }
+                }
+
+                const search = (document.getElementById('participant-search')?.value || '').toLowerCase();
+                const filtered = window.appState.participants.filter(p => {
+                    const matchEvt = p.eventId === window.appState.selectedEventId;
+                    const matchSearch = p.fullName.toLowerCase().includes(search) || p.email.toLowerCase().includes(search);
+                    return matchEvt && matchSearch;
+                });
+
+                const tbody = document.getElementById('participants-table-body');
+                if (filtered.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">Belum ada peserta di event ini.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = filtered.map(p => `
+                    <tr class="hover:bg-slate-50/80 transition">
+                        <td class="p-4 text-center"><input type="checkbox" class="part-checkbox w-4 h-4 rounded text-brand-600" value="${p.participantId}" onchange="app.updateBulkBar()"></td>
+                        <td class="p-4"><strong class="font-bold text-slate-800 block">${p.fullName}</strong></td>
+                        <td class="p-4 text-slate-600">${p.email}<br><span class="text-[10px] text-slate-400">${p.phone || '-'}</span></td>
+                        <td class="p-4 text-slate-600">${p.institution || '-'}<br><span class="text-[10px] text-slate-400">${p.position || '-'}</span></td>
+                        <td class="p-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${p.attendanceStatus === 'Present' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}">${p.attendanceStatus}</span></td>
+                        <td class="p-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${p.certificateGenerated ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}">${p.certificateGenerated ? 'Terbit' : 'Belum'}</span></td>
+                        <td class="p-4 text-center">
+                            <button onclick="app.generateSingleCertificate('${p.participantId}')" class="p-2 text-brand-600 hover:bg-brand-50 rounded-lg" title="Generate Sertifikat"><i class="fa-solid fa-certificate"></i></button>
+                        </td>
+                    </tr>
+                `).join('');
+            },
+
+            updateBulkBar: function() {
+                const checked = document.querySelectorAll('.part-checkbox:checked');
+                const bar = document.getElementById('participant-bulk-bar');
+                if (checked.length > 0) {
+                    bar.classList.remove('hidden');
+                    document.getElementById('bulk-selected-count').innerText = `${checked.length} peserta dipilih`;
+                } else {
+                    bar.classList.add('hidden');
+                }
+            },
+
+            toggleCheckAllParticipants: function(master) {
+                document.querySelectorAll('.part-checkbox').forEach(c => c.checked = master.checked);
+                this.updateBulkBar();
+            },
+
+            handleSaveParticipant: async function(e) {
+                e.preventDefault();
+                const id = document.getElementById('part-form-id').value || ("part_" + Date.now());
+                const partObj = {
+                    participantId: id,
+                    eventId: window.appState.selectedEventId,
+                    fullName: document.getElementById('part-form-name').value,
+                    email: document.getElementById('part-form-email').value,
+                    phone: document.getElementById('part-form-phone').value,
+                    institution: document.getElementById('part-form-inst').value,
+                    position: document.getElementById('part-form-pos').value,
+                    attendanceStatus: document.getElementById('part-form-attendance').value,
+                    certificateGenerated: false,
+                    createdAt: new Date().toISOString()
+                };
+
+                showLoader("Menyimpan peserta...");
+                try {
+                    const idx = window.appState.participants.findIndex(x => x.participantId === id);
+                    if (idx >= 0) window.appState.participants[idx] = partObj;
+                    else window.appState.participants.push(partObj);
+
+                    if (!window.appState.isDemoMode && db) {
+                        await setDoc(doc(db, "participants", id), partObj);
+                    } else { saveDemoLocalData(); }
+
+                    showToast("Peserta berhasil disimpan!", "success");
+                    this.closeModal('modal-participant');
+                    this.renderParticipants();
+                } catch(err) { showToast("Gagal menyimpan peserta", "error"); }
+                finally { hideLoader(); }
+            },
+
+            initTemplateEditor: function() {
+                const select = document.getElementById('tmpl-editor-event-select');
+                if (select) {
+                    select.innerHTML = window.appState.events.map(e => `
+                        <option value="${e.eventId}" ${e.eventId === window.appState.selectedEventId ? 'selected' : ''}>${e.name}</option>
+                    `).join('');
+                }
+                this.loadTemplateForEvent();
+            },
+
+            loadTemplateForEvent: function() {
+                const eventId = document.getElementById('tmpl-editor-event-select')?.value || window.appState.selectedEventId;
+                window.appState.selectedEventId = eventId;
+
+                let tmpl = window.appState.templates.find(t => t.eventId === eventId);
+                if (!tmpl) {
+                    tmpl = {
+                        templateId: "tmpl_" + eventId,
+                        eventId: eventId,
+                        width: 1920,
+                        height: 1080,
+                        bgImage: null,
+                        elements: [
+                            { id: 'el_title', type: 'text', field: 'certificateTitle', x: 960, y: 270, fontSize: 44, color: '#1e3a8a', fontFamily: 'Playfair Display', align: 'center' },
+                            { id: 'el_no', type: 'text', field: 'certificateNumber', x: 960, y: 350, fontSize: 22, color: '#475569', fontFamily: 'Plus Jakarta Sans', align: 'center' },
+                            { id: 'el_given', type: 'text', text: 'Diberikan Kepada:', x: 960, y: 440, fontSize: 20, color: '#64748b', fontFamily: 'Plus Jakarta Sans', align: 'center' },
+                            { id: 'el_name', type: 'text', field: 'fullName', x: 960, y: 530, fontSize: 64, color: '#0f172a', fontFamily: 'Playfair Display', align: 'center' },
+                            { id: 'el_event', type: 'text', field: 'eventName', x: 960, y: 650, fontSize: 28, color: '#334155', fontFamily: 'Montserrat', align: 'center' },
+                            { id: 'el_date', type: 'text', field: 'issueDate', x: 960, y: 730, fontSize: 20, color: '#64748b', fontFamily: 'Plus Jakarta Sans', align: 'center' },
+                            { id: 'el_qr', type: 'qrcode', x: 1560, y: 770, size: 170 }
+                        ]
+                    };
+                    window.appState.templates.push(tmpl);
+                }
+
+                const w = tmpl.width || 1920;
+                const h = tmpl.height || 1080;
+                const badge = document.getElementById('tmpl-dim-badge');
+                if (badge) badge.innerText = `${w} x ${h} px`;
+                const resText = document.getElementById('tmpl-res-text');
+                if (resText) resText.innerText = `${w} x ${h} px`;
+
+                this.renderTemplateCanvas();
+            },
+
+            handleBackgroundUpload: function(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                showLoader("Membaca dan memproses ukuran gambar...");
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const originalW = img.naturalWidth || img.width;
+                        const originalH = img.naturalHeight || img.height;
+
+                        const eventId = window.appState.selectedEventId;
+                        let tmpl = window.appState.templates.find(t => t.eventId === eventId);
+                        if (!tmpl) {
+                            tmpl = { templateId: "tmpl_" + eventId, eventId: eventId, elements: [] };
+                            window.appState.templates.push(tmpl);
+                        }
+
+                        const prevW = tmpl.width || 1920;
+                        const prevH = tmpl.height || 1080;
+
+                        tmpl.bgImage = e.target.result;
+                        tmpl.width = originalW;
+                        tmpl.height = originalH;
+
+                        // Scale elements proportionally to fit new dimensions
+                        const scaleX = originalW / prevW;
+                        const scaleY = originalH / prevH;
+                        if (tmpl.elements && tmpl.elements.length > 0) {
+                            tmpl.elements.forEach(el => {
+                                el.x = Math.round(el.x * scaleX);
+                                el.y = Math.round(el.y * scaleY);
+                                if (el.fontSize) el.fontSize = Math.round(el.fontSize * Math.min(scaleX, scaleY));
+                                if (el.size) el.size = Math.round(el.size * Math.min(scaleX, scaleY));
+                            });
+                        }
+
+                        const badge = document.getElementById('tmpl-dim-badge');
+                        if (badge) badge.innerText = `${originalW} x ${originalH} px`;
+                        const resText = document.getElementById('tmpl-res-text');
+                        if (resText) resText.innerText = `${originalW} x ${originalH} px`;
+
+                        hideLoader();
+                        this.renderTemplateCanvas();
+                        showToast(`Ukuran sertifikat disesuaikan ke ${originalW} x ${originalH} px!`, "success");
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            },
+
+            renderTemplateCanvas: async function() {
+                const eventId = window.appState.selectedEventId;
+                const tmpl = window.appState.templates.find(t => t.eventId === eventId);
+                const ev = window.appState.events.find(e => e.eventId === eventId);
+
+                const dummyPart = { fullName: "Dr. Budi Santoso, M.Kom (Preview)", institution: "Universitas Indonesia" };
+                const canvas = await renderCertificateCanvas(dummyPart, tmpl, ev, "CERT/2026/DEMO/000001", "00000000-0000-0000-0000-000000000000");
+
+                const targetCanvas = document.getElementById('template-editor-canvas');
+                if (targetCanvas) {
+                    targetCanvas.width = canvas.width;
+                    targetCanvas.height = canvas.height;
+                    const ctx = targetCanvas.getContext('2d');
+                    ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+                    ctx.drawImage(canvas, 0, 0);
+
+                    // If an element is currently selected in editor, draw selection box
+                    if (this.selectedElementId && tmpl && tmpl.elements) {
+                        const sel = tmpl.elements.find(el => el.id === this.selectedElementId);
+                        if (sel) {
+                            ctx.save();
+                            ctx.strokeStyle = '#3b82f6';
+                            ctx.lineWidth = Math.max(2, Math.round(canvas.width * 0.002));
+                            ctx.setLineDash([6, 6]);
+                            if (sel.type === 'qrcode') {
+                                ctx.strokeRect(sel.x - 6, sel.y - 6, (sel.size || 180) + 12, (sel.size || 180) + 12);
+                            } else {
+                                const boxW = (sel.fontSize || 32) * 10;
+                                const boxH = (sel.fontSize || 32) * 1.5;
+                                const left = sel.align === 'center' ? sel.x - boxW / 2 : sel.x;
+                                ctx.strokeRect(left, sel.y - boxH / 2, boxW, boxH);
+                            }
+                            ctx.restore();
+                        }
+                    }
+                }
+            },
+
+            setupCanvasInteractions: function() {
+                const canvas = document.getElementById('template-editor-canvas');
+                if (!canvas) return;
+
+                const getCanvasCoords = (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    return {
+                        x: (e.clientX - rect.left) * scaleX,
+                        y: (e.clientY - rect.top) * scaleY
+                    };
+                };
+
+                canvas.addEventListener('mousedown', (e) => {
+                    const { x, y } = getCanvasCoords(e);
+                    const tmpl = window.appState.templates.find(t => t.eventId === window.appState.selectedEventId);
+                    if (!tmpl || !tmpl.elements) return;
+
+                    let hit = null;
+                    for (let i = tmpl.elements.length - 1; i >= 0; i--) {
+                        const el = tmpl.elements[i];
+                        if (el.type === 'qrcode') {
+                            const size = el.size || 180;
+                            if (x >= el.x && x <= el.x + size && y >= el.y && y <= el.y + size) {
+                                hit = el;
+                                break;
+                            }
+                        } else {
+                            const boxW = (el.fontSize || 32) * 10;
+                            const boxH = (el.fontSize || 32) * 1.5;
+                            const left = el.align === 'center' ? el.x - boxW / 2 : el.x;
+                            if (x >= left && x <= left + boxW && y >= el.y - boxH / 2 && y <= el.y + boxH / 2) {
+                                hit = el;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (hit) {
+                        this.selectedElementId = hit.id || (hit.id = 'el_' + Date.now());
+                        this.isDraggingCanvasElement = true;
+                        this.dragOffset = { x: x - hit.x, y: y - hit.y };
+                        this.showElementInspector(hit);
+                        this.renderTemplateCanvas();
+                    } else {
+                        this.selectedElementId = null;
+                        this.hideElementInspector();
+                        this.renderTemplateCanvas();
+                    }
+                });
+
+                window.addEventListener('mousemove', (e) => {
+                    if (!this.isDraggingCanvasElement || !this.selectedElementId) return;
+                    const { x, y } = getCanvasCoords(e);
+                    const tmpl = window.appState.templates.find(t => t.eventId === window.appState.selectedEventId);
+                    if (!tmpl || !tmpl.elements) return;
+
+                    const el = tmpl.elements.find(item => item.id === this.selectedElementId);
+                    if (el) {
+                        el.x = Math.round(x - this.dragOffset.x);
+                        el.y = Math.round(y - this.dragOffset.y);
+                        this.updateInspectorValues(el);
+                        this.renderTemplateCanvas();
+                    }
+                });
+
+                window.addEventListener('mouseup', () => {
+                    this.isDraggingCanvasElement = false;
+                });
+            },
+
+            showElementInspector: function(el) {
+                const empty = document.getElementById('inspector-empty');
+                const controls = document.getElementById('inspector-controls');
+                if (empty) empty.classList.add('hidden');
+                if (controls) controls.classList.remove('hidden');
+
+                document.getElementById('insp-el-name').innerText = el.field || el.type || 'Elemen';
+                this.updateInspectorValues(el);
+            },
+
+            updateInspectorValues: function(el) {
+                const xInp = document.getElementById('insp-x');
+                const yInp = document.getElementById('insp-y');
+                const fontInp = document.getElementById('insp-font-size');
+                const colorInp = document.getElementById('insp-color');
+                const familyInp = document.getElementById('insp-font-family');
+
+                if (xInp) xInp.value = el.x;
+                if (yInp) yInp.value = el.y;
+                if (fontInp && el.fontSize) fontInp.value = el.fontSize;
+                if (colorInp && el.color) colorInp.value = el.color;
+                if (familyInp && el.fontFamily) familyInp.value = el.fontFamily;
+            },
+
+            hideElementInspector: function() {
+                const empty = document.getElementById('inspector-empty');
+                const controls = document.getElementById('inspector-controls');
+                if (empty) empty.classList.remove('hidden');
+                if (controls) controls.classList.add('hidden');
+            },
+
+            updateSelectedProp: function(prop, value) {
+                if (!this.selectedElementId) return;
+                const tmpl = window.appState.templates.find(t => t.eventId === window.appState.selectedEventId);
+                if (!tmpl || !tmpl.elements) return;
+
+                const el = tmpl.elements.find(item => item.id === this.selectedElementId);
+                if (el) {
+                    if (prop === 'x' || prop === 'y' || prop === 'fontSize') {
+                        el[prop] = parseInt(value) || 0;
+                    } else {
+                        el[prop] = value;
+                    }
+                    this.renderTemplateCanvas();
+                }
+            },
+
+            deleteSelectedElement: function() {
+                if (!this.selectedElementId) return;
+                const tmpl = window.appState.templates.find(t => t.eventId === window.appState.selectedEventId);
+                if (!tmpl || !tmpl.elements) return;
+
+                tmpl.elements = tmpl.elements.filter(el => el.id !== this.selectedElementId);
+                this.selectedElementId = null;
+                this.hideElementInspector();
+                this.renderTemplateCanvas();
+                showToast("Elemen berhasil dihapus", "info");
+            },
+
+            addTemplateElement: function(type, field) {
+                const eventId = window.appState.selectedEventId;
+                let tmpl = window.appState.templates.find(t => t.eventId === eventId);
+                if (!tmpl) {
+                    tmpl = { templateId: "tmpl_" + eventId, eventId: eventId, width: 1920, height: 1080, elements: [] };
+                    window.appState.templates.push(tmpl);
+                }
+
+                const w = tmpl.width || 1920;
+                const h = tmpl.height || 1080;
+                const id = 'el_' + Date.now();
+
+                let newEl;
+                if (type === 'qrcode') {
+                    newEl = { id, type: 'qrcode', x: Math.round(w * 0.8), y: Math.round(h * 0.7), size: Math.round(w * 0.09) };
+                } else {
+                    newEl = {
+                        id,
+                        type: 'text',
+                        field: field,
+                        text: field ? '' : 'Teks Baru',
+                        x: Math.round(w * 0.5),
+                        y: Math.round(h * 0.5),
+                        fontSize: Math.round(w * 0.02),
+                        color: '#1e293b',
+                        fontFamily: 'Plus Jakarta Sans',
+                        align: 'center'
+                    };
+                }
+
+                tmpl.elements.push(newEl);
+                this.selectedElementId = id;
+                this.showElementInspector(newEl);
+                this.renderTemplateCanvas();
+                showToast("Elemen berhasil ditambahkan ke canvas", "success");
+            },
+
+            saveCurrentTemplate: async function() {
+                const eventId = window.appState.selectedEventId;
+                const tmpl = window.appState.templates.find(t => t.eventId === eventId);
+                if (!tmpl) return;
+
+                showLoader("Menyimpan template & dimensi...");
+                try {
+                    if (!window.appState.isDemoMode && db) {
+                        await setDoc(doc(db, "templates", tmpl.templateId), tmpl);
+                    } else {
+                        saveDemoLocalData();
+                    }
+                    await logActivity("UPDATE_TEMPLATE", "templates", tmpl.templateId, { eventId: tmpl.eventId, dimensions: `${tmpl.width}x${tmpl.height}` });
+                    hideLoader();
+                    showToast("Template & Dimensi Sertifikat Berhasil Disimpan!", "success");
+                    this.openShareClaimModal(eventId);
+                } catch(e) {
+                    hideLoader();
+                    showToast("Gagal menyimpan template: " + e.message, "error");
+                }
+            },
+
+            openShareClaimModal: function(eventId) {
+                const targetEventId = eventId || window.appState.selectedEventId;
+                const ev = window.appState.events.find(e => e.eventId === targetEventId);
+                const tmpl = window.appState.templates.find(t => t.eventId === targetEventId);
+
+                const claimUrl = `${window.location.origin}${window.location.pathname}?claim=${targetEventId}`;
+                document.getElementById('share-claim-url-input').value = claimUrl;
+
+                document.getElementById('share-modal-event-name').innerText = ev ? ev.name : "Event Terpilih";
+                const w = (tmpl && tmpl.width) ? tmpl.width : 1920;
+                const h = (tmpl && tmpl.height) ? tmpl.height : 1080;
+                document.getElementById('share-modal-res-badge').innerText = `${w} x ${h} px`;
+
+                const qrContainer = document.getElementById('share-modal-qrcode');
+                qrContainer.innerHTML = '';
+                try {
+                    new QRCode(qrContainer, {
+                        text: claimUrl,
+                        width: 80,
+                        height: 80,
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                } catch(e){}
+
+                this.openModal('modal-share-claim');
+            },
+
+            copyShareClaimURL: function() {
+                const input = document.getElementById('share-claim-url-input');
+                input.select();
+                navigator.clipboard.writeText(input.value);
+                showToast("Link berhasil disalin ke clipboard!", "success");
+            },
+
+            shareViaWhatsApp: function() {
+                const url = document.getElementById('share-claim-url-input').value;
+                const evName = document.getElementById('share-modal-event-name').innerText;
+                const msg = encodeURIComponent(`Halo! Kamu bisa membuat dan men-download sertifikat kamu untuk kegiatan "${evName}" di sini:\n\n${url}\n\nMasukkan namamu dan download sertifikat beresolusi tinggi!`);
+                window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+            },
+
+            openPublicClaimPage: function() {
+                const url = document.getElementById('share-claim-url-input').value;
+                window.location.href = url;
+            },
+
+            performPublicClaim: async function(eventId) {
+                this.currentClaimEventId = eventId;
+                let ev = window.appState.events.find(e => e.eventId === eventId);
+                if (!ev && !window.appState.isDemoMode && db) {
+                    try {
+                        const evDoc = await getDoc(doc(db, "events", eventId));
+                        if (evDoc.exists()) ev = evDoc.data();
+                    } catch(e){}
+                }
+
+                if (!ev && window.appState.events.length > 0) {
+                    ev = window.appState.events[0];
+                }
+
+                let tmpl = window.appState.templates.find(t => t.eventId === (ev ? ev.eventId : eventId));
+                if (!tmpl && !window.appState.isDemoMode && db && ev) {
+                    try {
+                        const tmplDoc = await getDoc(doc(db, "templates", "tmpl_" + ev.eventId));
+                        if (tmplDoc.exists()) tmpl = tmplDoc.data();
+                    } catch(e){}
+                }
+
+                if (ev) {
+                    document.getElementById('claim-event-title').innerText = ev.name;
+                    document.getElementById('claim-event-organizer').innerText = ev.organizer || 'CertifyHub Platform';
+                    document.getElementById('claim-event-desc').innerText = ev.description || 'Silakan masukkan nama lengkap dan data Anda di bawah ini untuk menerbitkan sertifikat resmi Anda.';
+                    document.getElementById('claim-event-status-badge').innerText = ev.status || 'ACTIVE';
+                }
+
+                const w = (tmpl && tmpl.width) ? tmpl.width : 1920;
+                const h = (tmpl && tmpl.height) ? tmpl.height : 1080;
+                document.getElementById('claim-dimension-info').innerText = `Ukuran Desain Asli: ${w} x ${h} px (High Resolution)`;
+
+                this.updateLiveClaimPreview();
+            },
+
+            updateLiveClaimPreview: async function() {
+                const eventId = this.currentClaimEventId || window.appState.selectedEventId;
+                const ev = window.appState.events.find(e => e.eventId === eventId) || window.appState.events[0];
+                const tmpl = window.appState.templates.find(t => t.eventId === (ev ? ev.eventId : eventId));
+
+                const nameInput = document.getElementById('claim-input-name')?.value?.trim() || "Nama Lengkap Anda";
+                const instInput = document.getElementById('claim-input-inst')?.value?.trim() || "";
+
+                const dummyParticipant = { fullName: nameInput, institution: instInput };
+                const canvas = await renderCertificateCanvas(dummyParticipant, tmpl, ev, `${ev ? ev.certificatePrefix : 'CERT/'}000001`, "00000000-0000-0000-0000-000000000000");
+
+                const liveCanvas = document.getElementById('claim-live-canvas');
+                if (liveCanvas) {
+                    liveCanvas.width = canvas.width;
+                    liveCanvas.height = canvas.height;
+                    const ctx = liveCanvas.getContext('2d');
+                    ctx.drawImage(canvas, 0, 0);
+                }
+            },
+
+            downloadClaimPNG: async function() {
+                const name = document.getElementById('claim-input-name')?.value?.trim();
+                if (!name) {
+                    showToast("Harap masukkan nama lengkap Anda terlebih dahulu!", "warning");
+                    document.getElementById('claim-input-name').focus();
+                    return;
+                }
+
+                showLoader("Membuat sertifikat resolusi tinggi...");
+                try {
+                    const eventId = this.currentClaimEventId || window.appState.selectedEventId;
+                    const ev = window.appState.events.find(e => e.eventId === eventId) || window.appState.events[0];
+                    const tmpl = window.appState.templates.find(t => t.eventId === (ev ? ev.eventId : eventId));
+                    const email = document.getElementById('claim-input-email')?.value?.trim() || "";
+                    const inst = document.getElementById('claim-input-inst')?.value?.trim() || "";
+
+                    const uuid = self.crypto?.randomUUID ? self.crypto.randomUUID() : 'cert_' + Math.random().toString(36).substr(2, 9);
+                    const certNum = `${ev.certificatePrefix}${String(ev.certificateCounter).padStart(6, '0')}`;
+                    ev.certificateCounter++;
+
+                    const participant = {
+                        participantId: "part_" + Date.now(),
+                        eventId: ev.eventId,
+                        fullName: name,
+                        email: email,
+                        institution: inst,
+                        attendanceStatus: 'Present',
+                        certificateGenerated: true,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    const canvas = await renderCertificateCanvas(participant, tmpl, ev, certNum, uuid);
+                    const imgUrl = canvas.toDataURL('image/png');
+
+                    const certObj = {
+                        certificateId: "cert_" + Date.now(),
+                        eventId: ev.eventId,
+                        participantId: participant.participantId,
+                        uuid: uuid,
+                        certificateNumber: certNum,
+                        recipientName: name,
+                        eventName: ev.name,
+                        issueDate: new Date().toISOString().split('T')[0],
+                        status: 'valid',
+                        imageUrl: imgUrl,
+                        verificationUrl: `${window.location.origin}${window.location.pathname}?verify=${uuid}`,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    window.appState.participants.push(participant);
+                    window.appState.certificates.push(certObj);
+
+                    if (!window.appState.isDemoMode && db) {
+                        await setDoc(doc(db, "participants", participant.participantId), participant);
+                        await setDoc(doc(db, "certificates", certObj.certificateId), certObj);
+                        await updateDoc(doc(db, "events", ev.eventId), { certificateCounter: ev.certificateCounter });
+                    } else {
+                        saveDemoLocalData();
+                    }
+
+                    // Trigger direct PNG download
+                    const link = document.createElement('a');
+                    link.download = `Sertifikat_${name.replace(/[^a-zA-Z0-9]/g, '_')}_${canvas.width}x${canvas.height}.png`;
+                    link.href = imgUrl;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    hideLoader();
+                    showToast("Sertifikat PNG resolusi tinggi berhasil diunduh!", "success");
+                } catch(e) {
+                    hideLoader();
+                    showToast("Gagal mengunduh sertifikat: " + e.message, "error");
+                }
+            },
+
+            downloadClaimPDF: async function() {
+                const name = document.getElementById('claim-input-name')?.value?.trim();
+                if (!name) {
+                    showToast("Harap masukkan nama lengkap Anda terlebih dahulu!", "warning");
+                    document.getElementById('claim-input-name').focus();
+                    return;
+                }
+
+                showLoader("Menyiapkan dokumen PDF resolusi tinggi...");
+                try {
+                    const eventId = this.currentClaimEventId || window.appState.selectedEventId;
+                    const ev = window.appState.events.find(e => e.eventId === eventId) || window.appState.events[0];
+                    const tmpl = window.appState.templates.find(t => t.eventId === (ev ? ev.eventId : eventId));
+                    const email = document.getElementById('claim-input-email')?.value?.trim() || "";
+                    const inst = document.getElementById('claim-input-inst')?.value?.trim() || "";
+
+                    const uuid = self.crypto?.randomUUID ? self.crypto.randomUUID() : 'cert_' + Math.random().toString(36).substr(2, 9);
+                    const certNum = `${ev.certificatePrefix}${String(ev.certificateCounter).padStart(6, '0')}`;
+                    ev.certificateCounter++;
+
+                    const participant = {
+                        participantId: "part_" + Date.now(),
+                        eventId: ev.eventId,
+                        fullName: name,
+                        email: email,
+                        institution: inst,
+                        attendanceStatus: 'Present',
+                        certificateGenerated: true,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    const canvas = await renderCertificateCanvas(participant, tmpl, ev, certNum, uuid);
+                    const imgUrl = canvas.toDataURL('image/png');
+
+                    const certObj = {
+                        certificateId: "cert_" + Date.now(),
+                        eventId: ev.eventId,
+                        participantId: participant.participantId,
+                        uuid: uuid,
+                        certificateNumber: certNum,
+                        recipientName: name,
+                        eventName: ev.name,
+                        issueDate: new Date().toISOString().split('T')[0],
+                        status: 'valid',
+                        imageUrl: imgUrl,
+                        verificationUrl: `${window.location.origin}${window.location.pathname}?verify=${uuid}`,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    window.appState.participants.push(participant);
+                    window.appState.certificates.push(certObj);
+
+                    if (!window.appState.isDemoMode && db) {
+                        await setDoc(doc(db, "participants", participant.participantId), participant);
+                        await setDoc(doc(db, "certificates", certObj.certificateId), certObj);
+                        await updateDoc(doc(db, "events", ev.eventId), { certificateCounter: ev.certificateCounter });
+                    } else {
+                        saveDemoLocalData();
+                    }
+
+                    const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
+                    const { jsPDF } = window.jspdf;
+                    const docPdf = new jsPDF({
+                        orientation: orientation,
+                        unit: 'px',
+                        format: [canvas.width, canvas.height]
+                    });
+                    docPdf.addImage(imgUrl, 'PNG', 0, 0, canvas.width, canvas.height);
+                    docPdf.save(`Sertifikat_${name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+
+                    hideLoader();
+                    showToast("Sertifikat PDF resolusi tinggi berhasil diunduh!", "success");
+                } catch(e) {
+                    hideLoader();
+                    showToast("Gagal mengunduh PDF: " + e.message, "error");
+                }
+            },
+
+            generateSingleCertificate: async function(participantId) {
+                const part = window.appState.participants.find(p => p.participantId === participantId);
+                if (!part) return;
+
+                const ev = window.appState.events.find(e => e.eventId === part.eventId);
+                if (!ev) { showToast("Event tidak ditemukan!", "error"); return; }
+
+                showLoader("Generating sertifikat...");
+                try {
+                    const uuid = self.crypto?.randomUUID ? self.crypto.randomUUID() : 'cert_' + Math.random().toString(36).substr(2, 9);
+                    const certNum = `${ev.certificatePrefix}${String(ev.certificateCounter).padStart(6, '0')}`;
+                    ev.certificateCounter++;
+
+                    const tmpl = window.appState.templates.find(t => t.eventId === ev.eventId);
+                    const canvas = await renderCertificateCanvas(part, tmpl, ev, certNum, uuid);
+                    const imgUrl = canvas.toDataURL('image/png');
+
+                    const certObj = {
+                        certificateId: "cert_" + Date.now(),
+                        eventId: ev.eventId,
+                        participantId: part.participantId,
+                        uuid: uuid,
+                        certificateNumber: certNum,
+                        recipientName: part.fullName,
+                        eventName: ev.name,
+                        issueDate: new Date().toISOString().split('T')[0],
+                        status: 'valid',
+                        imageUrl: imgUrl,
+                        verificationUrl: `${window.location.origin}${window.location.pathname}?verify=${uuid}`,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    part.certificateGenerated = true;
+                    window.appState.certificates.push(certObj);
+
+                    if (!window.appState.isDemoMode && db) {
+                        await setDoc(doc(db, "certificates", certObj.certificateId), certObj);
+                        await updateDoc(doc(db, "participants", part.participantId), { certificateGenerated: true });
+                        await updateDoc(doc(db, "events", ev.eventId), { certificateCounter: ev.certificateCounter });
+                    } else { saveDemoLocalData(); }
+
+                    await logActivity("GENERATE_CERTIFICATE", "certificates", certObj.certificateId, { name: part.fullName });
+                    showToast("Sertifikat berhasil diterbitkan!", "success");
+                    this.renderParticipants();
+                } catch(err) {
+                    showToast("Gagal generate: " + err.message, "error");
+                } finally { hideLoader(); }
+            },
+
+            generateBulkCertificates: async function() {
+                const checked = Array.from(document.querySelectorAll('.part-checkbox:checked')).map(c => c.value);
+                if (checked.length === 0) return;
+
+                showLoader("Generating masal sertifikat...", true);
+                let done = 0;
+                for (const partId of checked) {
+                    await this.generateSingleCertificate(partId);
+                    done++;
+                    updateLoaderProgress(Math.round((done / checked.length) * 100), `${done} / ${checked.length} selesai`);
+                    await new Promise(r => setTimeout(r, 60));
+                }
+                hideLoader();
+                showToast(`Selesai memproses ${checked.length} sertifikat!`, "success");
+                this.renderParticipants();
+            },
+
+            renderCertificates: function() {
+                const search = (document.getElementById('cert-search')?.value || '').toLowerCase();
+                const statusFilter = document.getElementById('cert-filter-status')?.value || 'ALL';
+
+                const filtered = window.appState.certificates.filter(c => {
+                    const matchSearch = c.recipientName.toLowerCase().includes(search) || c.certificateNumber.toLowerCase().includes(search) || c.uuid.includes(search);
+                    const matchStatus = statusFilter === 'ALL' || c.status === statusFilter;
+                    return matchSearch && matchStatus;
+                });
+
+                const tbody = document.getElementById('certificates-table-body');
+                if (filtered.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">Belum ada sertifikat terbit.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = filtered.map(c => `
+                    <tr class="hover:bg-slate-50/80 transition text-xs">
+                        <td class="p-4"><strong class="font-mono text-slate-800">${c.certificateNumber}</strong><br><span class="text-[10px] text-slate-400 font-mono">${c.uuid}</span></td>
+                        <td class="p-4 font-bold text-slate-800">${c.recipientName}</td>
+                        <td class="p-4 text-slate-600">${c.eventName}</td>
+                        <td class="p-4 text-slate-500">${c.issueDate}</td>
+                        <td class="p-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${c.status === 'valid' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}">${c.status.toUpperCase()}</span></td>
+                        <td class="p-4 text-center space-x-1">
+                            <button onclick="app.copyVerifyLink('${c.uuid}')" class="p-2 text-slate-600 hover:bg-slate-100 rounded-lg" title="Salin Link Verifikasi"><i class="fa-solid fa-link"></i></button>
+                            ${c.status === 'valid' ? `<button onclick="app.openRevokeModal('${c.certificateId}')" class="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Cabut Sertifikat"><i class="fa-solid fa-ban"></i></button>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            },
+
+            copyVerifyLink: function(uuid) {
+                const link = `${window.location.origin}${window.location.pathname}?verify=${uuid}`;
+                navigator.clipboard.writeText(link);
+                showToast("Link verifikasi berhasil disalin!", "success");
+            },
+
+            openRevokeModal: function(certId) {
+                window.appState.revokeCertTargetId = certId;
+                this.openModal('modal-revoke');
+            },
+
+            confirmRevokeCertificate: async function() {
+                const reason = document.getElementById('revoke-reason-input').value;
+                if (!reason) return;
+
+                const cert = window.appState.certificates.find(c => c.certificateId === window.appState.revokeCertTargetId);
+                if (cert) {
+                    cert.status = 'revoked';
+                    cert.revocationReason = reason;
+
+                    if (!window.appState.isDemoMode && db) {
+                        await updateDoc(doc(db, "certificates", cert.certificateId), { status: 'revoked', revocationReason: reason });
+                    } else { saveDemoLocalData(); }
+
+                    await logActivity("REVOKE_CERTIFICATE", "certificates", cert.certificateId, { reason });
+                    showToast("Sertifikat berhasil dicabut.", "warning");
+                    this.closeModal('modal-revoke');
+                    this.renderCertificates();
+                }
+            },
+
+            performPublicVerification: async function(uuid) {
+                let cert = window.appState.certificates.find(c => c.uuid === uuid);
+                if (!cert && !window.appState.isDemoMode && db) {
+                    try {
+                        const q = query(collection(db, "certificates"), where("uuid", "==", uuid));
+                        const snap = await getDocs(q);
+                        if (!snap.empty) cert = snap.docs[0].data();
+                    } catch(e){}
+                }
+
+                const header = document.getElementById('verify-status-header');
+                const title = document.getElementById('verify-status-title');
+                const badge = document.getElementById('verify-badge-icon');
+
+                if (cert) {
+                    document.getElementById('v-name').innerText = cert.recipientName;
+                    document.getElementById('v-number').innerText = cert.certificateNumber;
+                    document.getElementById('v-event').innerText = cert.eventName;
+                    document.getElementById('v-date').innerText = cert.issueDate;
+                    document.getElementById('v-uuid').innerText = cert.uuid;
+
+                    if (cert.imageUrl) {
+                        const imgEl = document.getElementById('v-image');
+                        imgEl.src = cert.imageUrl;
+                        imgEl.classList.remove('hidden');
+                        document.getElementById('v-image-placeholder').classList.add('hidden');
+                    }
+
+                    if (cert.status === 'valid') {
+                        header.className = "p-6 md:p-8 text-center text-white bg-emerald-600 relative overflow-hidden";
+                        badge.innerHTML = `<i class="fa-solid fa-circle-check text-4xl text-white"></i>`;
+                        title.innerText = "✓ SERTIFIKAT VALID & TERVERIFIKASI";
+                    } else {
+                        header.className = "p-6 md:p-8 text-center text-white bg-red-600 relative overflow-hidden";
+                        badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-4xl text-white"></i>`;
+                        title.innerText = "✕ SERTIFIKAT TELAH DICABUT (REVOKED)";
+                        document.getElementById('verify-revoked-box').classList.remove('hidden');
+                        document.getElementById('v-revoke-reason').innerText = cert.revocationReason || "Tidak dicantumkan.";
+                    }
+                } else {
+                    header.className = "p-6 md:p-8 text-center text-white bg-slate-800 relative overflow-hidden";
+                    badge.innerHTML = `<i class="fa-solid fa-circle-xmark text-4xl text-red-500"></i>`;
+                    title.innerText = "✕ SERTIFIKAT TIDAK DITEMUKAN";
+                }
+            },
+
+            promptQuickVerify: function() {
+                const uuid = prompt("Masukkan Nomor Sertifikat atau UUID untuk verifikasi:");
+                if (uuid) {
+                    window.location.href = `?verify=${uuid.trim()}`;
+                }
+            },
+
+            downloadVerifyPDF: function() {
+                const { jsPDF } = window.jspdf;
+                const img = document.getElementById('v-image');
+                if (img && img.src) {
+                    const doc = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1920, 1080] });
+                    doc.addImage(img.src, 'PNG', 0, 0, 1920, 1080);
+                    doc.save(`Sertifikat_${document.getElementById('v-name').innerText}.pdf`);
+                } else {
+                    showToast("Gambar sertifikat tidak tersedia", "error");
+                }
+            },
+
+            renderUsers: function() {
+                const tbody = document.getElementById('users-table-body');
+                tbody.innerHTML = window.appState.users.map(u => `
+                    <tr class="hover:bg-slate-50 transition text-xs">
+                        <td class="p-4 font-bold text-slate-800">${u.name}</td>
+                        <td class="p-4 text-slate-600">${u.email}</td>
+                        <td class="p-4"><span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-brand-50 text-brand-700">${u.role}</span></td>
+                        <td class="p-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${u.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100'}">${u.status}</span></td>
+                        <td class="p-4 text-slate-400">${u.createdAt || '-'}</td>
+                    </tr>
+                `).join('');
+            },
+
+            renderLogs: function() {
+                const list = document.getElementById('full-activity-logs-list');
+                list.innerHTML = window.appState.activityLogs.map(l => `
+                    <div class="p-4 border-b border-slate-100 flex items-center justify-between text-xs">
+                        <div>
+                            <strong class="font-bold text-slate-800">${l.action}</strong>
+                            <p class="text-slate-500 text-[11px]">${l.userName} • Target: ${l.targetId}</p>
+                        </div>
+                        <span class="text-slate-400 text-[10px] font-mono">${new Date(l.timestamp).toLocaleString()}</span>
+                    </div>
+                `).join('');
+            },
+
+            renderSettings: function() {
+                const s = window.appState.settings;
+                document.getElementById('set-platform-name').value = s.platformName;
+                document.getElementById('set-org-name').value = s.orgName;
+                document.getElementById('set-org-email').value = s.orgEmail;
+                document.getElementById('set-org-phone').value = s.orgPhone;
+            },
+
+            saveSettings: function(e) {
+                e.preventDefault();
+                showToast("Pengaturan berhasil disimpan!", "success");
+            },
+
+            switchAuthTab: function(tab) {
+                if (tab === 'login') {
+                    document.getElementById('form-login').classList.remove('hidden');
+                    document.getElementById('form-register').classList.add('hidden');
+                } else {
+                    document.getElementById('form-login').classList.add('hidden');
+                    document.getElementById('form-register').classList.remove('hidden');
+                }
+            },
+
+            handleLogin: async function(e) {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+
+                showLoader("Proses Autentikasi...");
+                try {
+                    if (auth) {
+                        await signInWithEmailAndPassword(auth, email, password);
+                        showToast("Berhasil login!", "success");
+                    } else {
+                        window.appState.userRole = 'superadmin';
+                        document.getElementById('view-auth').classList.add('hidden');
+                        showToast("Login Berhasil!", "success");
+                    }
+                } catch(err) {
+                    showToast("Login Gagal: " + err.message, "error");
+                } finally { hideLoader(); }
+            },
+
+            handleRegister: async function(e) {
+                e.preventDefault();
+                const name = document.getElementById('reg-name').value;
+                const email = document.getElementById('reg-email').value;
+                const password = document.getElementById('reg-password').value;
+                const role = document.getElementById('reg-role').value;
+
+                showLoader("Mendaftarkan Pengguna...");
+                try {
+                    if (auth) {
+                        const res = await createUserWithEmailAndPassword(auth, email, password);
+                        await setDoc(doc(db, "users", res.user.uid), {
+                            uid: res.user.uid, name, email, role, status: 'active', createdAt: new Date().toISOString()
+                        });
+                        showToast("Registrasi Berhasil!", "success");
+                    } else {
+                        showToast("Firebase Auth belum aktif di cloud console.", "warning");
+                    }
+                } catch(err) {
+                    showToast("Registrasi Gagal: " + err.message, "error");
+                } finally { hideLoader(); }
+            },
+
+            handleLogout: async function() {
+                if (auth) await signOut(auth);
+                document.getElementById('view-auth').classList.remove('hidden');
+                showToast("Anda telah keluar.", "info");
+            },
+
+            handleForgotPassword: function() {
+                const email = prompt("Masukkan email Anda untuk reset password:");
+                if (email && auth) {
+                    sendPasswordResetEmail(auth, email);
+                    showToast("Email reset password telah dikirim!", "info");
+                }
+            },
+
+            continueAsDemo: function() {
+                document.getElementById('view-auth').classList.add('hidden');
+                enableDemoMode();
+                showToast("Masuk ke dashboard sistem", "info");
+            },
+
+            openModal: function(id) { document.getElementById(id)?.classList.remove('hidden'); },
+            closeModal: function(id) { document.getElementById(id)?.classList.add('hidden'); },
+
+            openImportCSVModal: function() { this.openModal('modal-import-csv'); },
+            handleCSVFileSelected: function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const text = evt.target.result;
+                    const lines = text.split('\n').filter(l => l.trim().length > 0);
+                    const rows = lines.slice(1).map(l => {
+                        const cols = l.split(',');
+                        return { fullName: cols[0]?.trim(), email: cols[1]?.trim(), phone: cols[2]?.trim(), institution: cols[3]?.trim(), position: cols[4]?.trim() };
+                    });
+                    window.appState.csvParsedData = rows;
+                    const prev = document.getElementById('csv-preview-container');
+                    prev.classList.remove('hidden');
+                    prev.innerHTML = `<strong>${rows.length} baris peserta terdeteksi:</strong><br>` + rows.map(r => `${r.fullName} (${r.email})`).join('<br>');
+                };
+                reader.readAsText(file);
+            },
+
+            processCSVImport: async function() {
+                const rows = window.appState.csvParsedData;
+                if (!rows.length) return;
+
+                showLoader("Mengimpor data peserta...");
+                for (const r of rows) {
+                    const id = "part_" + Date.now() + Math.random().toString().substr(2, 4);
+                    const obj = {
+                        participantId: id,
+                        eventId: window.appState.selectedEventId,
+                        fullName: r.fullName || 'Peserta CSV',
+                        email: r.email || 'email@csv.com',
+                        phone: r.phone || '',
+                        institution: r.institution || '',
+                        position: r.position || '',
+                        attendanceStatus: 'Present',
+                        certificateGenerated: false,
+                        createdAt: new Date().toISOString()
+                    };
+                    window.appState.participants.push(obj);
+                    if (!window.appState.isDemoMode && db) {
+                        await setDoc(doc(db, "participants", id), obj);
+                    }
+                }
+                if (window.appState.isDemoMode) saveDemoLocalData();
+                hideLoader();
+                showToast(`Berhasil mengimpor ${rows.length} peserta!`, "success");
+                this.closeModal('modal-import-csv');
+                this.renderParticipants();
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => window.app.init());
+    </script>
+</body>
+</html>
